@@ -153,6 +153,20 @@ class MyThread extends Thread {
 
 ### 2.2 方式二：实现 Runnable 接口（推荐 ⭐）
 
+**步骤：**
+
+1. 定义一个线程任务类`MyRunnable`实现`Runnable`接口，重写`run()`方法
+
+2. 创建`MyRunnable`任务对象
+
+3. 把`MyRunnable`任务对象交给`Thread`处理。
+
+|      Thread 类提供的构造器       |              说明              |
+| :------------------------------: | :----------------------------: |
+| `public Thread(Runnable target)` | 封装 Runnable 对象成为线程对象 |
+
+4. 调用线程对象的`start()`方法启动线程
+
 ```java
 // ① 定义任务类实现 Runnable
 public class MyRunnable implements Runnable {
