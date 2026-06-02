@@ -465,13 +465,15 @@ class MyThread2 extends Thread {
 
 > ⚠️ 三者**缺一不可**！只要有一个不满足，就不存在线程安全问题。
 
----
 
-## 五、线程同步（解决方案）
+
+### 4.4 线程安全问题代码复现
 
 ![1](../images/46.png)
 
-注意：这里的小明、小红处理的是同一个账户对象，都是acc
+**注意：**
+
+* 这里的小明、小红处理的是同一个账户对象，都是acc
 
 ```java
 package com.dyx.demo2threadapi.demo3threadsafe;
@@ -544,18 +546,17 @@ public class ThreadDemo1 {
 //注意：这里的小明、小红处理的是同一个账户对象，都是acc
 ```
 
+---
+
+## 五、线程同步（解决方案）
+
 ### 5.1 线程同步的核心思想
 
 > **让多个线程先后依次访问共享资源**，避免同时访问导致的问题。
 
 ### 5.2 加锁机制
 
-```
-① 每次只允许一个线程加锁
-② 加锁后才能进入访问
-③ 访问完毕自动解锁
-④ 然后其他线程才能再加锁进来
-```
+**加锁**：每次只允许一个线程加锁，加锁后才能进入访问，访问完毕后自动解锁，然后其他线程才能再加锁进来。
 
 ### 5.3 三种同步方式
 
@@ -569,15 +570,50 @@ public class ThreadDemo1 {
 
 ## 六、方式一：同步代码块
 
-```java
+<span style="color:red">**作用**</span>：把访问共享资源的核心代码给上锁，以此保证线程安全。
+
+~~~java
 synchronized (同步锁) {
     // 访问共享资源的核心代码
 }
-```
+~~~
 
-**原理**：每次只允许一个线程加锁后进入，执行完毕后自动解锁。
+<span style="color:red">**原理**</span>：每次只允许一个线程加锁后进入，执行完毕后自动解锁，其他线程才可以进来执行。
+
+
+
+**同步锁的注意事项**
+
+- 对于当前同时执行的线程来说，同步锁必须是同一把（<span style="color:red">同一个对象</span>），否则会出bug。
+
+
+
+**<span style="color:red">示例:</span>**
+
+~~~java
+synchronized ("dlei") {
+//synchronized (new Object()) 
+    // 访问共享资源的核心代码
+}
+~~~
+
+**<span style="color:red">解析:</span>**
+
+* 对于线程来说是唯一对象，在JAVA里这是一个锁对象，是一个对象，直接写成"dlei"也可以，因为双引号的dlei对象在内存只是一份，只会在常量池中加载一份，这样就可以锁住小明、小红， 如果这里写成new Object()的话是不行的，因为小明过来就会new一个对象，小红过来也new一个对象，相当于每人一把锁，就锁不住两个人了，就不是唯一的。
+
+* 小红和小明都过来的时候，可能小明稍微快了一点，所以小明先占了锁，小明占了dlei这个锁之后，小红发现dlei这个锁上门就有标记，在计算机底层里对象是有对象头这些信息的，有标记，标记就是告诉人家我这个对象已经被人占用了。所以小明进来后小红就在外面等，小明走后就会把锁释放，小红再进来，发现余额不足。
+
+
 
 ### 6.1 同步锁对象的选择规范（重点 ⭐）
+
+**锁对象的使用规范**
+
+- <span style="color:red">建议使用共享资源作为锁对象</span>,对于实例方法建议使用 **this** 作为锁对象。
+
+- 对于静态方法建议使用<span style="color:red">字节码(类名.class)</span>对象作为锁对象。
+  - 因为**静态方法是直接拿类名来调用**，而且静态方法只有一份，对所有线程共享的，现在要锁住所有的线程，对于这个静态方法来说，这个类名.class文件就是唯一的。** 因为类名.class文件只有一份**
+
 
 | 场景 | 推荐锁对象 |
 | --- | --- |
@@ -600,15 +636,98 @@ public static void method() {
 }
 ```
 
+
+
+~~~java
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class Account {
+    private String cardId; // 卡号
+    private double money; // 余额
+
+    // 小明和小红都到这里来了取钱
+    public void drawMoney(double money) {
+        // 拿到当前谁来取钱。
+        String name = Thread.currentThread().getName();
+        // 判断余额是否足够
+        synchronized (this) {
+            if (this.money >= money) {
+                // 余额足够，取钱
+                System.out.println(name + "取钱成功，吐出了" + money + "元成功！");
+                // 更新余额
+                this.money -= money;
+                System.out.println(name + "取钱成功，取钱后，余额剩余" + this.money + "元");
+
+            } else {
+                // 余额不足
+                System.out.println(name + "取钱失败，余额不足");
+            }
+        }
+    }
+}
+  
+~~~
+
+```java
+// 取钱线程类
+public class DrawThread extends Thread{
+    private Account acc; // 记住线程对象要处理的账户对象。
+
+    public DrawThread(String name, Account acc) {
+        super(name);
+        this.acc = acc;
+    }
+
+    @Override
+    public void run() {
+        // 小明 小红 取钱
+        acc.drawMoney(100000);
+    }
+}
+```
+
+```java
+public class ThreadDemo1 {
+    public static void main(String[] args) {
+        // 目标：线程同步的方式一演示：同步代码块
+        // 1、设计一个账户类：用于创建小明和小红的共同账户对象，存入10万。
+        Account acc = new Account("ICBC-110", 100000);
+
+        // 2、设计线程类：创建小明和小红两个线程，模拟小明和小红同时去同一个账户取款10万。
+        new DrawThread("小明", acc).start();
+        new DrawThread("小红", acc).start();
+
+
+    }
+}
+```
+
 ---
 
 ## 七、方式二：同步方法
+
+**<span style="color:red">作用</span>:**把访问共享资源的核心方法上锁,从而保证线程安全。
 
 ```java
 修饰符 synchronized 返回值类型 方法名(形参列表) {
     // 操作共享资源的代码
 }
 ```
+
+**<span style="color:red">原理</span>:**每次只能一个线程进入,执行完毕以后自动解锁,其他线程才可以进来执行。
+
+
+
+**同步方法底层原理**
+
+- 同步方法其实底层也是有隐式锁对象的,只是锁的范围是整个方法代码。
+
+- 如果方法是实例方法:同步方法默认用 <span style="color:red">this</span> 作为锁对象。
+
+- 如果方法是静态方法:同步方法默认用 <span style="color:red">类名.class</span> 作为锁对象。
+
+
 
 **底层原理**（隐式锁）：
 
@@ -617,12 +736,84 @@ public static void method() {
 | **实例方法** | `this` |
 | **静态方法** | `类名.class` |
 
+```java
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class Account {
+    private String cardId; // 卡号
+    private double money; // 余额
+
+    // 小明和小红都到这里来了取钱
+    public void drawMoney(double money) {
+        // 拿到当前谁来取钱。
+        String name = Thread.currentThread().getName();
+        // 判断余额是否足够
+        synchronized (this) {
+            if (this.money >= money) {
+                // 余额足够，取钱
+                System.out.println(name + "取钱成功，吐出了" + money + "元成功！");
+                // 更新余额
+                this.money -= money;
+                System.out.println(name + "取钱成功，取钱后，余额剩余" + this.money + "元");
+
+            } else {
+                // 余额不足
+                System.out.println(name + "取钱失败，余额不足");
+            }
+        }
+    }
+}
+```
+
+```java
+// 取钱线程类
+public class DrawThread extends Thread{
+    private Account acc; // 记住线程对象要处理的账户对象。
+
+    public DrawThread(String name, Account acc) {
+        super(name);
+        this.acc = acc;
+    }
+
+    @Override
+    public void run() {
+        // 小明 小红 取钱
+        acc.drawMoney(100000);
+    }
+}
+```
+
+```java
+public class ThreadDemo1 {
+    public static void main(String[] args) {
+        // 目标：线程同步方式二：同步方法
+        // 1、设计一个账户类：用于创建小明和小红的共同账户对象，存入10万。
+        Account acc = new Account("ICBC-110", 100000);
+
+        // 2、设计线程类：创建小明和小红两个线程，模拟小明和小红同时去同一个账户取款10万。
+        new DrawThread("小明", acc).start();
+        new DrawThread("小红", acc).start();
+    }
+}
+```
+
 ### 7.1 同步代码块 vs 同步方法
 
 | 对比项 | 同步代码块 | 同步方法 |
 | --- | --- | --- |
 | **范围** | 锁范围**更小**（更细粒度） | 锁整个方法 |
 | **可读性** | — | 更好 |
+
+同步方法是如何保证线程安全的?
+
+- **对出现问题的核心方法使用 synchronized 修饰**
+- **每次只能一个线程占锁进入访问**
+
+同步方法的同步锁对象的原理?
+
+- **对于实例方法默认使用 this 作为锁对象。**
+- **对于静态方法默认使用 类名.class 对象作为锁对象。**
 
 ---
 
@@ -632,9 +823,24 @@ public static void method() {
 
 ### 8.1 基本用法
 
+- <span style="color:red">Lock锁是JDK5开始提供的一个新的锁定操作</span>,通过它可以创建出锁对象进行加锁和解锁,更灵活、更方便、更强大。
+
+- <span style="color:red">Lock是接口,不能直接实例化</span>,可以采用它的实现类 ReentrantLock 来构建 Lock 锁对象。
+
+| 构造器                   | 说明                   |
+| ------------------------ | ---------------------- |
+| `public ReentrantLock()` | 获得Lock锁的实现类对象 |
+
+**Lock的常用方法**
+
+| 方法名称        | 说明   |
+| --------------- | ------ |
+| `void lock()`   | 获得锁 |
+| `void unlock()` | 释放锁 |
+
 ```java
 public class Account {
-    private final Lock lock = new ReentrantLock();  // ⚠️ 建议加 final
+    private final Lock lock = new ReentrantLock();  // ⚠️ 建议加 final，保护锁对象
 
     public void drawMoney(double money) {
         lock.lock();              // ① 加锁
@@ -647,10 +853,81 @@ public class Account {
 }
 ```
 
+
+
+**示例**
+
+```java
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
+public class Account {
+    private String cardId; // 卡号
+    private double money; // 余额
+    private final Lock lk = new ReentrantLock(); // 保护锁对象
+
+    // 小明和小红都到这里来了取钱
+    public void drawMoney(double money) {
+        // 拿到当前谁来取钱。
+        String name = Thread.currentThread().getName();
+        lk.lock(); // 上锁
+        try {
+            // 判断余额是否足够
+            if (this.money >= money) {
+                // 余额足够，取钱
+                System.out.println(name + "取钱成功，吐出了" + money + "元成功！");
+                // 更新余额
+                this.money -= money;
+                System.out.println(name + "取钱成功，取钱后，余额剩余" + this.money + "元");
+            } else {
+                // 余额不足
+                System.out.println(name + "取钱失败，余额不足");
+            }
+        } finally {
+            lk.unlock();// 解锁
+        }
+    }
+}
+```
+
+```java
+// 取钱线程类
+public class DrawThread extends Thread{
+    private Account acc; // 记住线程对象要处理的账户对象。
+
+    public DrawThread(String name, Account acc) {
+        super(name);
+        this.acc = acc;
+    }
+
+    @Override
+    public void run() {
+        // 小明 小红 取钱
+        acc.drawMoney(100000);
+    }
+}
+```
+
+```java
+public class ThreadDemo1 {
+    public static void main(String[] args) {
+        // 目标：模拟线程安全问题。
+        // 1、设计一个账户类：用于创建小明和小红的共同账户对象，存入10万。
+        Account acc = new Account("ICBC-110", 100000);
+
+        // 2、设计线程类：创建小明和小红两个线程，模拟小明和小红同时去同一个账户取款10万。
+        new DrawThread("小明", acc).start();
+        new DrawThread("小红", acc).start();
+    }
+}
+```
+
 ### 8.2 注意事项 ⚠️
 
 1. **锁对象建议加 `final` 修饰**，防止被篡改；
 2. **释放锁的操作建议放到 `finally` 代码块中**，确保锁用完了一定会被释放。
+
+
 
 ---
 
@@ -658,13 +935,15 @@ public class Account {
 
 ### 9.1 什么是线程池？
 
-> **线程池就是一个可以复用线程的技术。**
+> **线程池就是一个可以<span style="color:red">复用线程的技术</span>。**
 
 ### 9.2 不使用线程池的问题
 
-> 用户每发起一个请求就**创建一个新线程**处理，**创建线程的开销很大**；请求过多时，会产生**大量线程**，严重影响系统性能。
+>  用户每发起一个请求,后台就需要创建一个新线程来处理,下次新任务来了肯定又要创建新线程处理的,<span style="color:red">创建新线程的开销是很大的,并且请求过多时,肯定会产生大量的线程出来</span>,这样会严重影响系统的性能。
 
 ### 9.3 线程池的工作原理
+
+线程池创建出来后一旦有任务的话，每次有新的任务（例如Runnable、Callable）的话都会扔到一个任务队列里去，交给固定的线程来处理，比如说这个线程处理这个任务，再来个任务就又交给一个任务处理，再来个任务就又交给一个任务处理，以此类推，如果后面没有线程可以处理了的话，它们就会在任务队列里进行排队，等待着这些线程来进行处理，这就是它的原理。比如说第一个线程处理完第一个任务后，就可以去处理后面的任务了。这样就可以控制线程的数量，不至于有过多的线程。提高了系统整体性能，既有线程又不会耗尽资源，这些线程就称之为工作线程，队列就称之为任务队列。任务队列里只能放Runnable任务或者Callable任务。因为任务就Runnable和Callable两种 
 
 ```
                  任务接口
