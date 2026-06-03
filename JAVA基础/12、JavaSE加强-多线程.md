@@ -943,26 +943,11 @@ public class ThreadDemo1 {
 
 ### 9.3 线程池的工作原理
 
-线程池创建出来后一旦有任务的话，每次有新的任务（例如Runnable、Callable）的话都会扔到一个任务队列里去，交给固定的线程来处理，比如说这个线程处理这个任务，再来个任务就又交给一个任务处理，再来个任务就又交给一个任务处理，以此类推，如果后面没有线程可以处理了的话，它们就会在任务队列里进行排队，等待着这些线程来进行处理，这就是它的原理。比如说第一个线程处理完第一个任务后，就可以去处理后面的任务了。这样就可以控制线程的数量，不至于有过多的线程。提高了系统整体性能，既有线程又不会耗尽资源，这些线程就称之为工作线程，队列就称之为任务队列。任务队列里只能放Runnable任务或者Callable任务。因为任务就Runnable和Callable两种 
+**<span style="color:red">原理：⭐⭐⭐⭐⭐</span>**
 
-```
-                 任务接口
-              ┌──────────────┐
-              │  Runnable    │
-              │  Callable    │
-              └──────┬───────┘
-                     ↓
-              ┌────────────────┐
-              │  任务队列       │
-              │  (WorkQueue)   │
-              └──────┬─────────┘
-                     ↓
-              ┌────────────────┐
-              │  工作线程       │
-              │ (WorkThread)   │
-              └────────────────┘
-                  线程池
-```
+* 线程池创建出来后一旦有任务的话，每次有新的任务（例如Runnable、Callable）的话都会扔到一个任务队列里去，交给固定的线程来处理，比如说这个线程处理这个任务，再来个任务就又交给一个任务处理，再来个任务就又交给一个任务处理，以此类推，如果后面没有线程可以处理了的话，它们就会在任务队列里进行排队，等待着这些线程来进行处理，这就是它的原理。比如说第一个线程处理完第一个任务后，就可以去处理后面的任务了。这样就可以控制线程的数量，不至于有过多的线程。提高了系统整体性能，既有线程又不会耗尽资源，这些线程就称之为工作线程，队列就称之为任务队列。任务队列里只能放Runnable任务或者Callable任务。因为任务就Runnable和Callable两种。 
+
+![1](../images/47.png)
 
 ---
 
@@ -970,14 +955,33 @@ public class ThreadDemo1 {
 
 > JDK 5.0 起提供了代表线程池的接口：**`ExecutorService`**
 
-| 方式 | 实现类 |
-| --- | --- |
-| **方式一**（推荐 ⭐） | `ThreadPoolExecutor`（自己创建） |
-| **方式二** | `Executors`（工具类，返回不同特点的线程池） |
+**方式一:**使用 ExecutorService 的实现类 ThreadPoolExecutor 自创建一个线程池对象。
+
+```
+ExecutorService
+      ↓
+ThreadPoolExecutor
+```
+
+**方式二:**使用 Executors(线程池的工具类)调用方法返回不同特点的线程池对象。
+
+
 
 ### 10.1 方式一：ThreadPoolExecutor（重点）
 
 #### 七大参数（必背 ⭐）
+
+| ThreadPoolExecutor 类提供的构造器                            | 作用                                       |
+| ------------------------------------------------------------ | ------------------------------------------ |
+| public ThreadPoolExecutor(int corePoolSize,<br/>                          int maximumPoolSize,<br/>                          long keepAliveTime,<br/>                          TimeUnit unit,<br/>                          BlockingQueue<Runnable> workQueue,<br/>                          ThreadFactory threadFactory,<br/>                          RejectedExecutionHandler handler) | 使用指定的初始化参数创建一个新的线程池对象 |
+
+- 参数一:corePoolSize:指定线程池的核心线程的数量。 `正式工:3`
+- 参数二:maximumPoolSize:指定线程池的最大线程数量。 `最大员工数:5` `临时工:2`
+- 参数三:keepAliveTime:指定临时线程的存活时间。 `临时工空闲多久被开除`
+- 参数四:unit:指定临时线程存活的时间单位(秒、分、时、天)
+- 参数五:workQueue:指定线程池的任务队列。 `客人排队的地方`
+- 参数六:threadFactory:指定线程池的线程工厂。 `负责招聘员工的(hr)`
+- 参数七:handler:指定线程池的任务拒绝策略(线程都在忙,任务队列也满了的时候,新任务来了该怎么处理)。 `忙不过来咋办?`
 
 ```java
 public ThreadPoolExecutor(
@@ -1003,14 +1007,102 @@ public ThreadPoolExecutor(
 | `threadFactory` | 线程工厂 | 负责**招聘员工**的 HR |
 | `handler` | 拒绝策略 | 忙不过来怎么办？|
 
+**<span style="color:red">注意：</span>**
+
+* 这个workQueue任务队列可以创建基于数组的任务队列，也可以是基于链表的任务队列。
+  * ArrayBlockingQueue是一个基于数组的任务队列
+  * LinkedBlockingQueue是一个基于链表的任务队列
+* threadFactory是负责创建线程的，这里的3个正式工2个临时工都需要有人创建
+* handler任务拒绝策略就是说：比如说我的任务队列可以排10个任务，现在10个任务都排满了，第11个任务过来，我该如何拒绝它，是直接抛异常还是说把原来某个任务去掉，然后来处理新任务，这都是需要配置任务决绝策略的。
+  * new ThreadPoolExecutor.CallerRunsPolicy()这个策略的意思就是说忙不过来就直接抛异常
+
+
+
+**示例：**
+
+```java
+public class ExecutorServiceDemo1 {
+    public static void main(String[] args) {
+        // 目标：创建线程池对象来使用。
+        // 1、使用线程池的实现类ThreadPoolExecutor声明七个参数来创建线程池对象。
+        ExecutorService pool = new ThreadPoolExecutor(3, 5,
+                10, TimeUnit.SECONDS, new ArrayBlockingQueue<>(3),
+               Executors.defaultThreadFactory(), new ThreadPoolExecutor.CallerRunsPolicy());
+    }
+}
+```
+
+ 
+
 ### 10.2 ExecutorService 常用方法
 
 | 方法 | 说明 |
 | --- | --- |
 | `void execute(Runnable command)` | 执行 **Runnable** 任务 |
-| `Future<T> submit(Callable<T> task)` | 执行 **Callable** 任务，返回 Future 对象 |
-| `void shutdown()` | **等全部任务执行完毕后**再关闭线程池 |
-| `List<Runnable> shutdownNow()` | **立刻关闭**，并返回未执行的任务 |
+| `Future<T> submit(Callable<T> task)` | 执行 **Callable** 任务，返回未来任务对象,用于获取线程返回的结果 |
+| `void shutdown()` | **等全部任务执行完毕后**，再关闭线程池 |
+| `List<Runnable> shutdownNow()` | **立刻关闭线程池**,停止正在执行的任务,并返回队列中未执行的任务 |
+
+**注意：**
+
+* Runnable任务可以复用
+
+  * 比如说在下方的示例代码中就出现了两次**"pool-1-thread-3输出：3"**
+
+  ~~~java
+  Runnable task = () -> System.out.println(Thread.currentThread().getName() + " 执行任务");
+  
+  // 同一个 task 对象,反复提交给线程池,被不同线程多次执行
+  Runnable task = new MyRunnable();
+  pool.execute(task);   // 线程1 执行
+  pool.execute(task);   // 线程2 执行
+  pool.execute(task);   // 线程1 又来执行(线程也被复用了)
+  ~~~
+
+  
+
+
+
+**示例：**
+
+~~~java
+public class ExecutorServiceDemo1 {
+    public static void main(String[] args) {
+        // 目标：创建线程池对象来使用。
+        // 1、使用线程池的实现类ThreadPoolExecutor声明七个参数来创建线程池对象。
+        ExecutorService pool = new ThreadPoolExecutor(3, 5,
+                10, TimeUnit.SECONDS, new ArrayBlockingQueue<>(3),
+               Executors.defaultThreadFactory(), new ThreadPoolExecutor.CallerRunsPolicy());
+
+        // 2、使用线程池处理任务！看会不会复用线程？
+        Runnable target = new MyRunnable();
+        pool.execute(target); // 提交第1个任务 创建第1个线程 自动启动线程处理这个任务
+        pool.execute(target); // 提交第2个任务 创建第2个线程 自动启动线程处理这个任务
+        pool.execute(target); // 提交第2个任务 创建第3个线程 自动启动线程处理这个任务
+        pool.execute(target); // 复用线程
+        pool.execute(target); // 复用线程
+
+        // 3、关闭线程池 ：一般不关闭线程池。
+        // pool.shutdown(); // 等所有任务执行完毕后再关闭线程池！
+//        pool.shutdownNow(); // 立即关闭，不管任务是否执行完毕！
+    }
+}
+~~~
+
+~~~java
+// 1、定义一个线程任务类实现Runnable接口
+public class MyRunnable implements Runnable {
+    // 2、重写run方法，设置线程任务
+    @Override
+    public void run() {
+        for (int i = 0; i < 5; i++) {
+            System.out.println(Thread.currentThread().getName() + "输出：" + i);
+        }
+    }
+}
+~~~
+
+
 
 ### 10.3 线程池的运行流程（重点 ⭐）
 
@@ -1024,26 +1116,140 @@ public ThreadPoolExecutor(
                                       └── 不能 → 执行拒绝策略
 ```
 
-> **什么时候创建临时线程？**
-> - 新任务提交时，发现**核心线程都在忙**，**任务队列也满了**，并且**还可以创建临时线程**。
+**什么时候开始创建临时线程?**
 
-> **什么时候拒绝新任务？**
-> - **核心线程和临时线程都在忙**，**任务队列也满了**，新任务来了才会拒绝。
+- 新任务提交时发现**核心线程都在忙,任务队列也满了**,并且**还可以创建临时线程**,此时才会创建临时线程。
+
+**什么时候会拒绝新任务?**
+
+- **核心线程和临时线程都在忙,任务队列也满了**,新的任务过来的时候才会开始拒绝任务。
+
+
+
+**重点⭐⭐⭐⭐⭐:**
+
+*  正在被核心线程处理的任务,已经从任务队列里取出来了,**它不在队列中**。任务队列里存放的,是还没被线程取走、正在排队等待执行的任务
+* 临时线程是**一个一个按需创建的,不会一次性全建出来**
+
+
+
+**Runnable代码示例：**
+
+```java
+public class ExecutorServiceDemo1 {
+    public static void main(String[] args) {
+        // 目标：创建线程池对象来使用。
+        // 1、使用线程池的实现类ThreadPoolExecutor声明七个参数来创建线程池对象。
+        ExecutorService pool = new ThreadPoolExecutor(3, 5,
+                10, TimeUnit.SECONDS, new ArrayBlockingQueue<>(3),
+               Executors.defaultThreadFactory(), new ThreadPoolExecutor.AbortPolicy());
+
+        // 2、使用线程池处理任务！看会不会复用线程？
+        Runnable target = new MyRunnable();
+        pool.execute(target); // 提交第1个任务 创建第1个线程 自动启动线程处理这个任务
+        pool.execute(target); // 提交第2个任务 创建第2个线程 自动启动线程处理这个任务
+        pool.execute(target); // 提交第2个任务 创建第3个线程 自动启动线程处理这个任务
+        pool.execute(target);
+        pool.execute(target);
+        pool.execute(target);
+        pool.execute(target); // 到了临时线程的创建时机了，创建临时线程1
+        pool.execute(target); // 到了临时线程的创建时机了，创建临时线程2
+        pool.execute(target); // 到了任务拒绝策略了，忙不过来
+
+        // 3、关闭线程池 ：一般不关闭线程池。
+        // pool.shutdown(); // 等所有任务执行完毕后再关闭线程池！
+//        pool.shutdownNow(); // 立即关闭，不管任务是否执行完毕！
+    }
+}
+```
+
+```java
+// 1、定义一个线程任务类实现Runnable接口
+public class MyRunnable implements Runnable {
+    // 2、重写run方法，设置线程任务
+    @Override
+    public void run() {
+        for (int i = 0; i < 5; i++) {
+            System.out.println(Thread.currentThread().getName() + "输出：" + i);
+            try {
+                Thread.sleep(Integer.MAX_VALUE);
+            } catch (Exception e) {
+               e.printStackTrace();
+            }
+        }
+    }
+}
+```
+
+**Callable代码示例：**
+
+```java
+public class ExecutorServiceDemo2 {
+    public static void main(String[] args) {
+        // 目标：创建线程池对象来使用。
+        // 1、使用线程池的实现类ThreadPoolExecutor声明七个参数来创建线程池对象。
+        ExecutorService pool = new ThreadPoolExecutor(3, 5,
+                10, TimeUnit.SECONDS, new ArrayBlockingQueue<>(3),
+               Executors.defaultThreadFactory(), new ThreadPoolExecutor.CallerRunsPolicy());
+
+        // 2、使用线程池处理Callable任务！
+        Future<String> f1 = pool.submit(new MyCallable(100));
+        Future<String> f2 = pool.submit(new MyCallable(200));
+        Future<String> f3 = pool.submit(new MyCallable(300));
+        Future<String> f4 = pool.submit(new MyCallable(400));
+
+        try {
+            System.out.println(f1.get());
+            System.out.println(f2.get());
+            System.out.println(f3.get());
+            System.out.println(f4.get());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+    }
+}
+```
+
+```java
+// 1、定义一个实现类实现Callable接口
+public class MyCallable implements Callable<String> {
+    private int n;
+    public MyCallable(int n) {
+        this.n = n;
+    }
+    // 2、实现call方法，定义线程执行体
+    public String call() throws Exception {
+        int sum = 0;
+        for (int i = 1; i <= n; i++) {
+            sum += i;
+        }
+        return Thread.currentThread().getName() +"计算1-" + n + "的和是："  + sum;
+    }
+}
+```
 
 ### 10.4 四大任务拒绝策略
 
 | 策略 | 说明 |
 | --- | --- |
-| **AbortPolicy** ⭐（默认） | 丢弃任务并抛出 `RejectedExecutionException` |
-| **DiscardPolicy** | 丢弃任务但**不抛异常**（不推荐） |
-| **DiscardOldestPolicy** | 抛弃**队列中等待最久**的任务，把当前任务加入队列 |
-| **CallerRunsPolicy** | 由**主线程**调用 `run()` 方法，绕过线程池直接执行 |
+| **ThreadPoolExecutor.AbortPolicy()** ⭐（默认） | 丢弃任务并抛出 `RejectedExecutionException`。<span style="color:red">是默认的策略</span> |
+| **ThreadPoolExecutor.DiscardPolicy()** | 丢弃任务但**不抛异常**（不推荐） |
+| **ThreadPoolExecutor.DiscardOldestPolicy()** | 抛弃**队列中等待最久**的任务，把当前任务加入队列 |
+| **ThreadPoolExecutor.CallerRunsPolicy()** | 由**主线程**负责调用任务的 run() 方法从而绕过线程池直接执行 |
 
 ---
 
 ## 十一、方式二：Executors 工具类
 
 > 是一个线程池的工具类，提供了**静态方法**用于返回不同特点的线程池。
+
+| 方法名称                                                     | 说明                                                         |
+| ------------------------------------------------------------ | ------------------------------------------------------------ |
+| <span style="color:red">`public static ExecutorService newFixedThreadPool(int nThreads)`</span> | 创建**固定线程数量**的线程池,如果某个线程因为执行异常而结束,那么线程池会补充一个新线程替代它。 |
+| `public static ExecutorService newSingleThreadExecutor()`    | 创建**只有一个线程**的线程池对象,如果该线程出现异常而结束,那么线程池会补充一个新线程。 |
+| `public static ExecutorService newCachedThreadPool()`        | 线程数量随着任务增加而增加,如果线程任务执行完毕且空闲了 60s 则会被回收掉。 |
+| `public static ScheduledExecutorService newScheduledThreadPool(int corePoolSize)` | 创建一个线程池,可以实现在给定的延迟后运行任务,或者定期执行任务。**（定时任务）** |
 
 | 方法 | 说明 |
 | --- | --- |
@@ -1054,13 +1260,47 @@ public ThreadPoolExecutor(
 
 > 💡 **底层原理**：这些方法**底层都是通过 `ThreadPoolExecutor` 实现的**。
 
+
+
+**示例：**
+
+```java
+public class ExecutorsDemo3 {
+    public static void main(String[] args) {
+        // 目标：通过线程池工具类：Executors，调用其静态方法直接得到线程池
+        ExecutorService pool = Executors.newFixedThreadPool(3);
+
+        Future<String> f1 = pool.submit(new MyCallable(100));
+        Future<String> f2 = pool.submit(new MyCallable(200));
+        Future<String> f3 = pool.submit(new MyCallable(300));
+        Future<String> f4 = pool.submit(new MyCallable(400));
+
+        try {
+            System.out.println(f1.get());
+            System.out.println(f2.get());
+            System.out.println(f3.get());
+            System.out.println(f4.get());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+```
+
 ### 11.1 Executors 的陷阱 ⚠️（阿里规范禁用）
 
 > **大型并发系统中使用 Executors 可能出现资源耗尽风险**：
+>
 > - `newFixedThreadPool` 和 `newSingleThreadExecutor`：任务队列长度 `Integer.MAX_VALUE` → **可能 OOM**
 > - `newCachedThreadPool`：线程数 `Integer.MAX_VALUE` → **可能创建大量线程导致 OOM**
 
 > ✅ **建议**：**使用 `ThreadPoolExecutor` 来指定线程池参数**，明确运行规则，规避资源耗尽风险。
+
+
+
+⭐⭐ ⭐ ⭐ ⭐<span style="color:red">  **记得问AI**：**线程池的核心线程数量和最大线程数量的配置公式是什么样的？**</span>
+
+![1](../images/50.png)
 
 ---
 
@@ -1068,10 +1308,13 @@ public ThreadPoolExecutor(
 
 ### 12.1 进程与线程的关系
 
-> **进程**：正在运行的程序（软件）就是一个独立的进程。
-> **线程**：线程属于进程，一个进程中可以同时运行很多个线程。
+> * <span style="color:red">**进程**：</span>正在运行的程序（软件）就是一个独立的进程。
+> * <span style="color:red">**线程**：</span>线程属于进程，一个进程中可以同时运行很多个线程。
+> * <span style="color:red">**进程中的多个线程其实是并发和并行执行的**</span>
 
 ### 12.2 并发（Concurrent）
+
+![1](../images/48.png)
 
 > **并发**：CPU **分时轮询**地执行线程。
 
@@ -1081,6 +1324,8 @@ CPU（单核）        →  时间片轮转，由于 CPU 切换速度很快，
 ```
 
 ### 12.3 并行（Parallel）
+
+![1](../images/49.png)
 
 > **并行**：在**同一个时刻**，**同时有多个线程**在被 CPU 调度执行。
 
@@ -1099,7 +1344,7 @@ CPU（4 核）
 | **并发** | **不是真正同时**（切换很快） | ✅ 可以 |
 | **并行** | **真正同时**（同一时刻多线程） | ❌ 必须多核 |
 
-> ⭐ **多线程实际运行**：**并发和并行同时进行的**。
+> ⭐⭐ ⭐ ⭐ ⭐<span style="color:red">  **多线程实际运行**：**并发和并行同时进行的**。</span>
 
 ---
 
