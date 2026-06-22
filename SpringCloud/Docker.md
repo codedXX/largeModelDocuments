@@ -370,6 +370,11 @@ source ~/.bashrc
 
 ## 3.3 数据卷
 
+**⭐注意：**
+
+* 数据卷是容器内目录何宿主机目录之间的桥梁，⭐**一旦关联后，docker就会实现宿主机目录与容器内目录的双向映射**
+  * 也就是说修改了宿主机内这个目录里做了修改，那容器内的这个目录也会修改；反之亦然
+
 **数据卷（volume）** 是一个**虚拟目录**，是**容器内目录**与**宿主机目录**之间映射的桥梁。
 
 ![数据卷映射示意图](../SpringCloudImages/docker-p26.png)
@@ -386,9 +391,17 @@ source ~/.bashrc
 | `docker volume inspect` | 查看某个数据卷的详情 |
 | `docker volume prune` | 清除（删除未使用的）数据卷 |
 
+**⭐注意：**
+
+* 不用死记硬背，可以通过docker volume --help去查看各个命令信息
+* 然后还可以通过类似docker volume create --help去更详细的查看命令信息
+
 ### 案例 1：利用 Nginx 容器部署静态资源
 
-**需求**：创建 Nginx 容器，修改容器内 html 目录下的 `index.html`；将静态资源部署到 nginx 的 html 目录。
+**需求**：
+
+* 创建 Nginx 容器，修改容器内 html 目录下的 `index.html`；
+* 将静态资源部署到 nginx 的 html 目录。
 
 > 💡 **提示**：
 >
@@ -399,9 +412,36 @@ source ~/.bashrc
 docker run -d --name nginx -p 80:80 -v html:/usr/share/nginx/html nginx
 ```
 
+
+
+**⭐问题：这里的html:/usr/share/nginx/html里左边的html指的是哪个目录？**
+
+* 左边的 `html`（因为没有 `/`）是一个**命名卷的名字**，它**不指向你电脑上你能直接看到的某个目录**，而是由 Docker 在内部托管的一块存储。
+
+* **既然 `html` 只是个名字，那它对应的物理位置到底由谁决定、在哪里？**
+
+  * 答案是：**位置不用你指定，Docker 自动按一个固定规则算出来。**
+
+    * 命名卷的物理位置 = 一个固定前缀 + 卷名：
+
+      ~~~bash
+      /var/lib/docker/volumes/<卷名>/_data
+      ~~~
+
+    * 所以你这个 `html` 卷，位置就是：
+
+      ~~~bash
+      /var/lib/docker/volumes/html/_data
+      ~~~
+
+* **可以通过docker inspect nginx 去查看详情**
+
 ### 案例 2：MySQL 容器的数据挂载
 
-**需求**：查看 mysql 容器是否有数据卷挂载；基于**宿主机目录**实现 MySQL 数据目录、配置文件、初始化脚本的挂载。
+**需求**：
+
+* 查看 mysql 容器是否有数据卷挂载；
+* 基于**宿主机目录**实现 MySQL 数据目录、配置文件、初始化脚本的挂载（查阅官方镜像文档）。
 
 > 💡 **提示**：在执行 `docker run` 命令时，使用 **`-v 本地目录:容器内目录`** 可以完成本地目录挂载。
 >
@@ -414,11 +454,27 @@ docker run -d --name nginx -p 80:80 -v html:/usr/share/nginx/html nginx
 > - `-v mysql:/var/lib/mysql` → 会被识别为一个**数据卷** `mysql`
 > - `-v ./mysql:/var/lib/mysql` → 会被识别为**当前目录下的 mysql 目录**
 
-> ✅ **小结**：
->
-> - **什么是数据卷？** —— 一个虚拟目录，将宿主机目录映射到容器内目录，方便操作容器内文件，或迁移容器产生的数据。
-> - **如何挂载数据卷？** —— 创建容器时用 `-v 数据卷名:容器内目录`；数据卷不存在时会自动创建。
-> - **常见命令**：`docker volume ls / rm / inspect / prune`。
+
+
+### 小结
+
+**什么是数据卷？**
+
+*  数据卷是一个虚拟目录，它将宿主机目录映射到容器内目录，方便我们操作容器内文件，或者方便迁移容器产生的数据
+
+**如何挂载数据卷？** 
+
+* 在创建容器时，利用 `-v 数据卷名:容器内目录` 完成挂载
+*  容器创建时，如果发现挂载的数据卷不存在时，会自动创建
+
+**数据卷的常见命令有哪些？**
+
+* `docker volume ls`: 查看数据卷
+* `docker volume rm`: 删除数据卷
+* `docker volume inspect`: 查看数据卷详情
+*  `docker volume prune`: 删除未使用的数据卷
+
+
 
 ---
 
@@ -437,6 +493,10 @@ docker run -d --name nginx -p 80:80 -v html:/usr/share/nginx/html nginx
 
 ### 镜像结构
 
+**⭐注意：**
+
+* docker镜像其实是由多个压缩包合并而成的，每次操作产生的这些压缩包就称为一层
+
 ![镜像的分层结构](../SpringCloudImages/docker-p34.png)
 
 > ✅ **镜像采用分层结构**，自底向上分为：
@@ -447,7 +507,7 @@ docker run -d --name nginx -p 80:80 -v html:/usr/share/nginx/html nginx
 
 ### Dockerfile
 
-**Dockerfile** 就是一个文本文件，其中包含一个个的**指令（Instruction）**，用指令来说明要执行什么操作来构建镜像。将来 Docker 可以根据 Dockerfile 帮我们构建镜像。常见指令如下：
+**Dockerfile** 就是一个文本文件，其中包含一个个的**指令（Instruction）**，用指令来说明要执行什么操作来构建镜像。将来 Docker 可以根据 Dockerfile 帮我们**构建镜像**。常见指令如下：
 
 | 指令 | 说明 | 示例 |
 | --- | --- | --- |
@@ -492,7 +552,52 @@ COPY docker-demo.jar /app.jar
 ENTRYPOINT ["java", "-jar", "/app.jar"]
 ```
 
+**注意：**
+
+* FROM openjdk:11.0-jre-buster已经做好了以下操作
+
+  ~~~bash
+  # 指定基础镜像
+  FROM ubuntu:16.04
+  # 配置环境变量，JDK 的安装目录、容器内时区
+  ENV JAVA_DIR=/usr/local
+  # 拷贝 jdk 和 java 项目的包
+  COPY ./jdk8.tar.gz $JAVA_DIR/
+  
+  # 安装 JDK
+  RUN cd $JAVA_DIR \
+   && tar -xf ./jdk8.tar.gz \
+   && mv ./jdk1.8.0_144 ./java8
+  # 配置环境变量
+  ENV JAVA_HOME=$JAVA_DIR/java8
+  ENV PATH=$PATH:$JAVA_HOME/bin
+  ~~~
+
+* 所以我们只需要做这两步即可。
+
+  ~~~bash
+  # 拷贝 jar 包
+  COPY docker-demo.jar /app.jar
+  # 入口
+  ENTRYPOINT ["java", "-jar", "/app.jar"]
+  ~~~
+
+  
+
 ### 构建镜像
+
+我们可以基于Ubuntu基础镜像，利用Dockerfile描述镜像结构 ，也可以直接基于JDK为基础镜像，省略前面的步骤：
+
+~~~bash
+# 基础镜像
+FROM openjdk:11.0-jre-buster
+# 拷贝 jar 包
+COPY docker-demo.jar /app.jar
+# 入口
+ENTRYPOINT ["java", "-jar", "/app.jar"]
+~~~
+
+
 
 当编写好了 Dockerfile，可以利用下面命令来构建镜像：
 
@@ -505,17 +610,33 @@ docker build -t myImage:1.0 .
 > - **`-t`**：给镜像起名，格式依然是 `repository:tag`，不指定 tag 时默认为 `latest`；
 > - **`.`**：指定 Dockerfile 所在目录，如果就在当前目录，则指定为 `.`。
 
-> ✅ **小结**：
->
-> - **镜像的结构**：包含应用程序所需的运行环境、函数库、配置以及应用本身等各种文件，这些文件**分层打包**而成。
-> - **Dockerfile 是做什么的？** —— 利用固定的指令来描述镜像的结构和构建过程，Docker 据此依次构建镜像。
-> - **构建镜像的命令**：`docker build -t 镜像名 Dockerfile目录`。
+
+
+### 小结
+
+**镜像的结构是怎样的？**
+
+* 镜像中包含了应用程序所需要的运行环境、函数库、配置、以及应用本身等各种文件，这些文件分层打包而成
+
+**Dockerfile 是做什么的？** 
+
+* Dockerfile就是利用固定的指令来描述镜像的结构和构建过程，这样Docker才可以依次来构建镜像
+
+**构建镜像的命令**
+
+* `docker build -t 镜像名 Dockerfile目录`。
+
+
 
 ---
 
 ## 3.5 网络
 
 默认情况下，所有容器都是以 **bridge（网桥）** 方式连接到 Docker 的一个**虚拟网桥 `docker0`** 上：
+
+**⭐注意：**
+
+* 172.17.0.1/16后面的16意思就是这个IP地址的前16位不能动，因为IP地址每一段最大为255，所以每一段为8位，所以/16的意思就是说这个IP地址的前两段是不能动，后面可以动，意思就是172.17不能动，后面可以动
 
 ![Docker 默认 bridge 网络](../SpringCloudImages/docker-p41.png)
 
