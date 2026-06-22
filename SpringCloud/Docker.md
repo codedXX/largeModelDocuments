@@ -456,6 +456,20 @@ docker run -d --name nginx -p 80:80 -v html:/usr/share/nginx/html nginx
 
 
 
+~~~bash
+docker run -d \
+  --name mysql \
+  -p 3306:3306 \
+  -e TZ=Asia/Shanghai \
+  -e MYSQL_ROOT_PASSWORD=123456 \
+  -v /root/mysql/data:/var/lib/mysql \
+  -v /root/mysql/init:/docker-entrypoint-initdb.d \
+  -v /root/mysql/conf:/etc/mysql/conf.d \
+  mysql:8.0
+~~~
+
+
+
 ### 小结
 
 **什么是数据卷？**
@@ -645,6 +659,8 @@ docker build -t myImage:1.0 .
 > ⚠️ **重点**：**加入自定义网络的容器才可以通过容器名互相访问。**
 
 ### 网络常见命令
+
+加入自定义网络的容器才可以通过容器名**互相访问**，Docker的网络操作命令如下：
 
 | 命令 | 说明 |
 | --- | --- |
