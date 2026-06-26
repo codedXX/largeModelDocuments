@@ -1095,11 +1095,21 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IU
 void deductMoneyById(@Param("id") Long id, @Param("money") Integer money);
 ```
 
+
+
+**⭐注意：**
+
+* UserServiceImpl里不需要依赖注入Mapper，**直接用baseMapper即可**
+
+
+
 #### 2.3.3.Lambda
 
 IService中还提供了Lambda功能来简化我们的复杂查询及更新功能。我们通过两个案例来学习一下。
 
-案例一：实现一个根据复杂条件查询用户的接口，查询条件如下：
+
+
+**案例一：实现一个根据复杂条件查询用户的接口，查询条件如下：**
 
 - name：用户名关键字，可以为空
 - status：用户状态，可以为空
@@ -1107,6 +1117,8 @@ IService中还提供了Lambda功能来简化我们的复杂查询及更新功能
 - maxBalance：最大余额，可以为空
 
 可以理解成一个用户的后台管理界面，管理员可以自己选择条件来筛选用户，因此上述条件不一定存在，需要做判断。
+
+
 
 我们首先需要定义一个查询条件实体，UserQuery实体：
 
@@ -1156,13 +1168,17 @@ public List<UserVO> queryUsers(UserQuery query){
 
 在组织查询条件的时候，我们加入了 username != null 这样的参数，意思就是当条件成立时才会添加这个查询条件，类似Mybatis的mapper.xml文件中的<if>标签。这样就实现了动态查询条件效果了。
 
+
+
 不过，上述条件构建的代码太麻烦了。
 因此Service中对LambdaQueryWrapper和LambdaUpdateWrapper的用法进一步做了简化。我们无需自己通过new的方式来创建Wrapper，而是直接调用lambdaQuery和lambdaUpdate方法：
 
-基于Lambda查询：
+
+
+**基于Lambda查询：**
 
 ```java
-@GetMapping("/list")
+**@GetMapping("/list")
 @ApiOperation("根据id集合查询用户")
 public List<UserVO> queryUsers(UserQuery query){
     // 1.组织条件
@@ -1182,7 +1198,7 @@ public List<UserVO> queryUsers(UserQuery query){
 }
 ```
 
-可以发现lambdaQuery方法中除了可以构建条件，还需要在链式编程的最后添加一个list()，这是在告诉MP我们的调用结果需要是一个list集合。这里不仅可以用list()，可选的方法有：
+**⭐可以发现lambdaQuery方法中除了可以构建条件，还需要在链式编程的最后添加一个list()，这是在告诉MP我们的调用结果需要是一个list集合。这里不仅可以用list()，可选的方法有：**
 
 - .one()：最多1个结果
 - .list()：返回集合结果
@@ -1190,17 +1206,23 @@ public List<UserVO> queryUsers(UserQuery query){
 
 MybatisPlus会根据链式编程的最后一个方法来判断最终的返回结果。
 
+
+
 与lambdaQuery方法类似，IService中的lambdaUpdate方法可以非常方便的实现复杂更新业务。
 
-例如下面的需求：
+**例如下面的需求：**
 
-需求：改造根据id修改用户余额的接口，要求如下
-•
-如果扣减后余额为0，则将用户status修改为冻结状态（2）
+> **需求：改造根据id修改用户余额的接口，要求如下**
+>
+> * 如果扣减后余额为0，则将用户status修改为冻结状态（2）
+
+
 
 也就是说我们在扣减用户余额时，需要对用户剩余余额做出判断，如果发现剩余余额为0，则应该将status修改为2，这就是说update语句的set部分是动态的。
 
-实现如下：
+
+
+**实现如下：**
 
 ```java
 @Override
@@ -1218,16 +1240,45 @@ public void deductBalance(Long id, Integer money) {
     }
     // 4.扣减余额 update tb_user set balance = balance - ?
     int remainBalance = user.getBalance() - money;
-    lambdaUpdate()
-            .set(User::getBalance, remainBalance) // 更新余额
-            .set(remainBalance == 0, User::getStatus, 2) // 动态判断，是否更新status
-            .eq(User::getId, id)
-            .eq(User::getBalance, user.getBalance()) // 乐观锁
-            .update();
+    lambdaUpdate()                                  	// ① 开启 lambda 更新链
+            .set(User::getBalance, remainBalance)       // ② SET balance = 新余额
+            .set(remainBalance == 0, User::getStatus, 2)// ③ 条件 SET：余额为0才把状态改成2
+            .eq(User::getId, id)                        // ④ WHERE id = ?
+            .eq(User::getBalance, user.getBalance())    // ⑤ WHERE balance = 旧余额（乐观锁）
+            .update();                                  // ⑥ 执行 UPDATE
 }
 ```
 
+> **⭐“WHERE balance = 旧余额（乐观锁）” 这里为什么叫乐观锁？**
+>
+> | 悲观锁 | 乐观锁                                                 |                                                |
+> | :----- | :----------------------------------------------------- | ---------------------------------------------- |
+> | 假设   | "**肯定有人**会跟我抢，我先锁住"                       | "**大概率没人**跟我抢，先不锁，提交时检查一下" |
+> | 做法   | 操作前先加锁（如 `SELECT ... FOR UPDATE`），别人只能等 | 不加锁，更新时**检查数据有没有被别人改过**     |
+> | 代价   | 安全但慢，并发低（大家排队）                           | 快、并发高，但冲突时本次操作要重试             |
+>
+> **补充：**
+>
+> * 用"余额本身"当比较字段有个小缺陷——如果余额先被人 -100 又被人 +100，绕回了原值，CAS 会误判"没被改过"（这叫 **ABA 问题**）。所以更规范的乐观锁会专门加一个 **`version` 版本号字段**，每次更新 `version + 1`，用 `WHERE version = 旧version` 来比对，从根本上避免 ABA。MyBatis-Plus 还为此提供了 `@Version` 注解自动处理。
+>
+> **一句话总结：**
+>
+> * 它叫乐观锁，是因为它**全程不给数据加锁**，只在更新时用 `WHERE balance = 旧余额` **检查数据有没有被别人改过**——这种"乐观地不上锁、靠提交时比对来发现冲突"的思路，就是乐观锁（CAS 模式）。更严谨的版本会用 `version` 字段代替余额来比对。
+
+
+
 #### 2.3.4.批量新增
+
+**需求：批量插入 10 万条用户数据，并作出对比：**
+
+- 普通 for 循环插入
+  - 性能极差，不推荐
+- IService 的批量插入
+  - 性能不错
+- 开启`rewriteBatchedStatements=true`参数
+  - 性能最好
+
+
 
 IService中的批量新增功能使用起来非常方便，但有一点注意事项，我们先来测试一下。
 首先我们测试逐条插入数据：
@@ -1262,6 +1313,14 @@ private User buildUser(int i) {
 
 可以看到速度非常慢。
 
+
+
+**⭐注意：**
+
+* 这种之所以慢，是因为每次往数据库提交都是一次网络请求，总共10万次提交就需要10万次网络请求，但**网络请求是比较耗时的**，所以这种方式最慢。
+
+
+
 然后再试试MybatisPlus的批处理：
 
 ```java
@@ -1288,6 +1347,14 @@ void testSaveBatch() {
 ![](../SpringCloudImages/mp-feishu-26.png)
 
 可以看到使用了批处理以后，比逐条新增效率提高了10倍左右，性能还是不错的。
+
+
+
+**⭐注意：**
+
+* 每1000条数据才发了一次网络请求，**网络请求减少**，所以速度大幅提升。
+
+
 
 不过，我们简单查看一下MybatisPlus源码：
 
@@ -1326,6 +1393,11 @@ Parameters: user_2, 123, 18688190002, "", 2000, 2023-07-01, 2023-07-01
 Parameters: user_3, 123, 18688190003, "", 2000, 2023-07-01, 2023-07-01
 ```
 
+> ⭐⭐
+>
+> - **`Preparing` 只出现一次** = 这个带 `?` 的 SQL 模板**只编译了一次**，然后被反复复用。
+> - **`Parameters` 出现三次** = 用三组不同的参数值，把这个模板**执行了三次** → 插入了 3 行。
+
 而如果想要得到最佳性能，最好是将多条SQL合并为一条，像这样：
 
 ```sql
@@ -1337,13 +1409,21 @@ VALUES
 (user_4, 123, 18688190004, "", 2000, 2023-07-01, 2023-07-01);
 ```
 
+
+
 该怎么做呢？
+
+
 
 MySQL的客户端连接参数中有这样的一个参数：rewriteBatchedStatements。顾名思义，就是重写批处理的statement语句。参考文档：
 
 > 🔗 https://dev.mysql.com/doc/connector-j/8.0/en/connector-j-connp-props-performance-extensions.html#cj-conn-prop_rewriteBatchedStatements dev.mysql.com
 
+
+
 这个参数的默认值是false，我们需要修改连接参数，将其配置为true
+
+
 
 修改项目中的application.yml文件，在jdbc的url后面添加参数&rewriteBatchedStatements=true:
 
@@ -1356,13 +1436,19 @@ spring:
     password: MySQL123
 ```
 
+> **⭐⭐⭐⭐⭐其实就是在MySQL 连接串加上 `rewriteBatchedStatements=true`。**
+>
+> * **加上之后MySQL驱动会帮我们把一条一条的SQL语句重写成一条SQL语句。**
+
 再次测试插入10万条数据，可以发现速度有非常明显的提升：
 
 ![](../SpringCloudImages/mp-feishu-27.png)
 
 在ClientPreparedStatement的executeBatchInternal中，有判断rewriteBatchedStatements值是否为true并重写SQL的功能：
 
-最终，SQL被重写了：
+
+
+**最终，SQL被重写了：**
 
 ![](../SpringCloudImages/mp-feishu-28.png)
 
@@ -1438,6 +1524,8 @@ void testDbUpdate() {
 }
 ```
 
+
+
 需求：改造根据id用户查询的接口，查询用户的同时返回用户收货地址列表
 
 首先，我们要添加一个收货地址的VO对象：
@@ -1485,6 +1573,8 @@ public class AddressVO{
 }
 ```
 
+
+
 然后，改造原来的UserVO，添加一个地址属性：
 
 ![](../SpringCloudImages/mp-feishu-35.png)
@@ -1499,6 +1589,8 @@ public UserVO queryUserById(@PathVariable("id") Long userId){
     return userService.queryUserAndAddressById(userId);
 }
 ```
+
+
 
 由于查询业务复杂，所以要在service层来实现。首先在IUserService中定义方法：
 
@@ -1515,6 +1607,8 @@ public interface IUserService extends IService<User> {
     UserVO queryUserAndAddressById(Long userId);
 }
 ```
+
+
 
 然后，在UserServiceImpl中实现该方法：
 
@@ -1539,13 +1633,15 @@ public UserVO queryUserAndAddressById(Long userId) {
 
 在查询地址时，我们采用了Db的静态方法，因此避免了注入AddressService，减少了循环依赖的风险。
 
+
+
 再来实现一个功能：
 
 - 根据id批量查询用户，并查询出用户对应的所有地址
 
 ### 3.3.逻辑删除
 
-对于一些比较重要的数据，我们往往会采用逻辑删除的方案，即：
+**对于一些比较重要的数据，我们往往会采用逻辑删除的方案，即：**
 
 - 在表中添加一个字段标记数据是否被删除
 - 当删除数据时把标记置为true
@@ -1553,10 +1649,15 @@ public UserVO queryUserAndAddressById(Long userId) {
 
 一旦采用了逻辑删除，所有的查询和删除逻辑都要跟着变化，非常麻烦。
 
-为了解决这个问题，MybatisPlus就添加了对逻辑删除的支持。
 
-❗
-注意，只有MybatisPlus生成的SQL语句才支持自动的逻辑删除，自定义SQL需要自己手动处理逻辑删除。
+
+**为了解决这个问题，MybatisPlus就添加了对逻辑删除的支持。**
+
+>  **❗注意**
+>
+> * **只有MybatisPlus生成的SQL语句才支持自动的逻辑删除，自定义SQL需要自己手动处理逻辑删除。**
+
+
 
 例如，我们给address表添加一个逻辑删除字段：
 
@@ -1610,14 +1711,15 @@ void testQuery() {
 
 综上， 开启了逻辑删除功能以后，我们就可以像普通删除一样做CRUD，基本不用考虑代码逻辑问题。还是非常方便的。
 
-❗
-注意：
-逻辑删除本身也有自己的问题，比如：
-•
-会导致数据库表垃圾数据越来越多，从而影响查询效率
-•
-SQL中全都需要对逻辑删除字段做判断，影响查询效率
-因此，我不太推荐采用逻辑删除功能，如果数据不能删除，可以采用把数据迁移到其它表的办法。
+> **❗注意：**
+> **逻辑删除本身也有自己的问题，比如：**
+>
+> * 会导致数据库表垃圾数据越来越多，从而影响查询效率
+> * SQL中全都需要对逻辑删除字段做判断，影响查询效率
+>
+> 因此，我不太推荐采用逻辑删除功能，如果数据不能删除，可以采用把数据迁移到其它表的办法。
+
+
 
 ### 3.3.通用枚举
 
@@ -1627,7 +1729,7 @@ User类中有一个用户状态字段：
 
 像这种字段我们一般会定义一个枚举，做业务判断的时候就可以直接基于枚举做比较。但是我们数据库采用的是int类型，对应的PO也是Integer。因此业务操作时必须手动把枚举与Integer转换，非常麻烦。
 
-因此，MybatisPlus提供了一个处理枚举的类型转换器，可以帮我们把枚举类型与数据库类型自动转换。
+因此，MybatisPlus提供了一个处理枚举的类型转换器，可以帮我们**把枚举类型与数据库类型自动转换**。
 
 #### 3.3.1.定义枚举
 
@@ -1662,8 +1764,9 @@ public enum UserStatus {
 
 ![](../SpringCloudImages/mp-feishu-41.png)
 
-要让MybatisPlus处理枚举与数据库类型自动转换，我们必须告诉MybatisPlus，枚举中的哪个字段的值作为数据库值。
-MybatisPlus提供了@EnumValue注解来标记枚举属性：
+**要让MybatisPlus处理枚举与数据库类型自动转换，我们必须告诉MybatisPlus，枚举中的哪个字段的值作为数据库值。**
+
+**MybatisPlus提供了@EnumValue注解来标记枚举属性：**
 
 ![](../SpringCloudImages/mp-feishu-42.png)
 
@@ -1695,13 +1798,15 @@ void testService() {
 
 ![](../SpringCloudImages/mp-feishu-44.png)
 
-并且，在UserStatus枚举中通过@JsonValue注解标记JSON序列化时展示的字段：
+并且，在UserStatus枚举中通过**@JsonValue**注解标记JSON序列化时展示的字段：
 
 ![](../SpringCloudImages/mp-feishu-45.png)
 
 最后，在页面查询，结果如下：
 
 ![](../SpringCloudImages/mp-feishu-46.png)
+
+
 
 ### 3.4.JSON类型处理器
 
@@ -1721,9 +1826,15 @@ void testService() {
 
 这样一来，我们要读取info中的属性时就非常不方便。如果要方便获取，info的类型最好是一个Map或者实体类。
 
+
+
 而一旦我们把info改为对象类型，就需要在写入数据库时手动转为String，再读取数据库时，手动转换为对象，这会非常麻烦。
 
+
+
 因此MybatisPlus提供了很多特殊类型字段的类型处理器，解决特殊字段类型与数据库类型转换的问题。例如处理JSON就可以使用JacksonTypeHandler处理器。
+
+
 
 接下来，我们就来看看这个处理器该如何使用。
 
@@ -1769,6 +1880,8 @@ public class UserInfo {
 此时，在页面查询结果如下：
 
 ![](../SpringCloudImages/mp-feishu-54.png)
+
+
 
 ### 3.5.配置加密（选学）
 
@@ -1838,9 +1951,11 @@ spring:
 
 然后随意运行一个单元测试，可以发现数据库查询正常。
 
+
+
 ## 4.插件功能
 
-MybatisPlus提供了很多的插件功能，进一步拓展其功能。目前已有的插件有：
+**MybatisPlus提供了很多的插件功能，进一步拓展其功能。目前已有的插件有：**
 
 - PaginationInnerInterceptor：自动分页
 - TenantLineInnerInterceptor：多租户
@@ -1849,15 +1964,12 @@ MybatisPlus提供了很多的插件功能，进一步拓展其功能。目前已
 - IllegalSQLInnerInterceptor：sql 性能规范
 - BlockAttackInnerInterceptor：防止全表更新与删除
 
-❗
-注意：
-使用多个分页插件的时候需要注意插件定义顺序，建议使用顺序如下：
-•
-多租户,动态表名
-•
-分页,乐观锁
-•
-sql 性能规范,防止全表更新与删除
+>  **❗注意：**
+> **使用多个分页插件的时候需要注意插件定义顺序，建议使用顺序如下：**
+>
+> * 多租户,动态表名
+> * 分页,乐观锁
+> * sql 性能规范,防止全表更新与删除
 
 这里我们以分页插件为里来学习插件的用法。
 
@@ -1942,9 +2054,11 @@ userService.page(page);
 | 请求路径 | /users/page |
 | 请求参数 | {     "pageNo": 1,     "pageSize": 5,     "sortBy": "balance",     "isAsc": false,     "name": "o",     "status": 1 } |
 | 返回值 | {     "total": 100006,     "pages": 50003,     "list": [         {             "id": 1685100878975279298,             "username": "user_9****",             "info": {                 "age": 24,                 "intro": "英文老师",                 "gender": "female"             },             "status": "正常",             "balance": 2000         }     ] } |
-| 特殊说明 | • 如果排序字段为空，默认按照更新时间排序 • 排序字段不为空，则按照排序字段排序 |
+| 特殊说明 | 1.如果排序字段为空，默认按照更新时间排序 <br />2.排序字段不为空，则按照排序字段排序 |
 
-这里需要定义3个实体：
+
+
+**这里需要定义3个实体：**
 
 - UserQuery：分页查询条件的实体，包含分页、排序参数、过滤条件
 - PageDTO：分页结果实体，包含总条数、总页数、当前页数据
@@ -1979,7 +2093,7 @@ public class UserQuery {
 
 ![](../SpringCloudImages/mp-feishu-58.png)
 
-PageQuery是前端提交的查询参数，一般包含四个属性：
+**PageQuery是前端提交的查询参数，一般包含四个属性：**
 
 - pageNo：页码
 - pageSize：每页数据条数
