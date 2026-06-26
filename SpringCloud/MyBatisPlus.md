@@ -1493,9 +1493,76 @@ spring:
 
 ### 3.2.静态工具
 
-有的时候Service之间也会相互调用，为了避免出现循环依赖问题，MybatisPlus提供一个静态工具类：Db，其中的一些静态方法与IService中方法签名基本一致，也可以帮助我们实现CRUD功能：
+**有的时候Service之间也会相互调用，为了避免出现循环依赖问题，MybatisPlus提供一个静态工具类：Db，其中的一些静态方法与IService中方法签名基本一致，也可以帮助我们实现CRUD功能：**
 
 ![](../SpringCloudImages/mp-feishu-34.png)
+
+> **⭐这里的循环依赖是什么意思？**
+>
+> **🔹一、什么是循环依赖**
+>
+> 在 Spring 里，Service 通常用 `@Autowired` 注入别的 Service 来调用。当**两个 Service 互相注入**时，就可能出现循环依赖：
+>
+> ```java
+> @Service
+> public class UserServiceImpl ... {
+>     @Autowired
+>     private OrderService orderService;   // user 依赖 order
+> }
+> 
+> @Service
+> public class OrderServiceImpl ... {
+>     @Autowired
+>     private UserService userService;     // order 又依赖 user
+> }
+> ```
+>
+> 这就成了 **A 依赖 B、B 又依赖 A** 的环。Spring 创建 Bean 时：要造 A 得先有 B，要造 B 又得先有 A……互相等待，**可能启动报错**（尤其是构造器注入，或加了 `@Async`、`@Transactional` 代理时更容易出问题）。
+>
+> **🔹二、`Db` 静态工具类怎么解决**
+>
+> MyBatis-Plus 的思路是：**你想操作 User 表，不一定非要注入 `UserService`**。它提供一个**静态工具类 `Db`**，直接通过实体类就能对任意表做 CRUD，**不需要注入对方的 Service Bean**：
+>
+> ```java
+> // 不用 @Autowired 注入 UserService，直接用 Db 操作 user 表
+> User user = Db.getById(userId, User.class);
+> 
+> List<User> users = Db.lambdaQuery(User.class)
+>         .eq(User::getStatus, 1)
+>         .list();
+> 
+> Db.lambdaUpdate(User.class)
+>         .set(User::getBalance, 0)
+>         .eq(User::getId, userId)
+>         .update();
+> ```
+>
+> **关键点**：`Db` 是**静态方法**，调用时**不经过 Spring 的依赖注入**——你不需要持有 `UserService` 这个 Bean 的引用，自然就**不会形成 Bean 之间的依赖环**，循环依赖问题从源头消失了。
+>
+> **🔹三、`Db` 和 `IService` 的关系**
+>
+> 文中说"方法签名基本一致"，意思是你已经会用 `IService` 的话，`Db` 几乎零学习成本，只是调用方式不同：
+>
+> |          | `IService`（实例方法）          | `Db`（静态方法）                 |
+> | :------- | :------------------------------ | :------------------------------- |
+> | 怎么拿到 | `@Autowired` 注入 `UserService` | 不用注入，直接 `Db.xxx()`        |
+> | 查单条   | `userService.getById(id)`       | `Db.getById(id, User.class)`     |
+> | 链式查   | `userService.lambdaQuery()...`  | `Db.lambdaQuery(User.class)...`  |
+> | 链式改   | `userService.lambdaUpdate()...` | `Db.lambdaUpdate(User.class)...` |
+> | 批量存   | `userService.saveBatch(list)`   | `Db.saveBatch(list)`             |
+>
+> 最大区别就一个：**`Db` 的方法通常要多传一个 `实体类.class`**（因为它没注入具体的 Service，得靠这个参数知道你要操作哪张表/哪个 Mapper）。
+>
+> **🔹四、什么时候用它**
+>
+> - **典型场景**：`OrderServiceImpl` 里需要查一下用户信息，但如果注入 `UserService` 会和对方形成循环依赖。这时就用 `Db.getById(userId, User.class)` 直接查，**绕开注入**。
+> - **不是所有地方都用 Db**：日常在自己的 Service 里操作自己的表，还是用 `this`/`IService` 方法更自然。`Db` 主要用于**跨 Service 操作别人的表、又想避免注入对方**的场景。
+>
+> **🔹一句话总结**
+>
+> > Service 之间互相 `@Autowired` 注入可能造成**循环依赖**。`Db` 是个**静态工具类**，让你**不注入对方 Service** 就能直接对任意表做 CRUD（用法和 `IService` 几乎一样，只是多传个 `实体.class`），从而从根上避开循环依赖。
+
+
 
 示例：
 
@@ -1641,13 +1708,13 @@ public UserVO queryUserAndAddressById(Long userId) {
 
 ### 3.3.逻辑删除
 
-**对于一些比较重要的数据，我们往往会采用逻辑删除的方案，即：**
+**⭐对于一些比较重要的数据，我们往往会采用逻辑删除的方案，即：**
 
 - 在表中添加一个字段标记数据是否被删除
 - 当删除数据时把标记置为true
 - 查询时过滤掉标记为true的数据
 
-一旦采用了逻辑删除，所有的查询和删除逻辑都要跟着变化，非常麻烦。
+**一旦采用了逻辑删除，所有的查询和删除逻辑都要跟着变化，非常麻烦。**
 
 
 
@@ -1659,11 +1726,37 @@ public UserVO queryUserAndAddressById(Long userId) {
 
 
 
+> **⭐⭐⭐⭐⭐配好之后（`@TableLogic` 或 yml 配置），它自动改写 SQL：**
+>
+> | 你调用的方法    | MyBatis-Plus 实际执行的 SQL                           |
+> | :-------------- | :---------------------------------------------------- |
+> | `removeById(1)` | `UPDATE user SET deleted=1 WHERE id=1`（不是 DELETE） |
+> | `getById(1)`    | `SELECT ... WHERE id=1 AND deleted=0`（自动过滤已删） |
+> | `list()`        | `SELECT ... WHERE deleted=0`（自动过滤已删）          |
+> | `update(...)`   | `UPDATE ... WHERE ... AND deleted=0`                  |
+>
+> **关键好处**：你的业务代码**一行都不用改**——还是正常调 `removeById`、`list`、`getById`，框架在背后自动把"软删除 + 过滤已删数据"处理好。既享受了逻辑删除的安全性，又不增加任何手写负担。
+
+
+
 例如，我们给address表添加一个逻辑删除字段：
 
 ```sql
 alter table address add deleted bit default b'0' null comment '逻辑删除';
 ```
+
+> **解释语句：**
+>
+> ~~~sql
+> alter table address          -- 修改 address 表
+> add deleted                  -- 新增一个名为 deleted 的列
+> bit                          -- 类型是 bit（位类型，只存 0 或 1，相当于布尔）
+> default b'0'                 -- 默认值为 0（b'0' 是二进制字面量写法，就是 0）
+> null                         -- 允许该列为 NULL
+> comment '逻辑删除';          -- 给字段加注释，说明用途
+> ~~~
+>
+> 
 
 然后给Address实体添加deleted字段：
 
@@ -1679,6 +1772,24 @@ mybatis-plus:
       logic-delete-value: 1 # 逻辑已删除值(默认为 1)
       logic-not-delete-value: 0 # 逻辑未删除值(默认为 0)
 ```
+
+> ⭐在 3.3.0**之前**，开启逻辑删除要做两步：
+>
+> 
+>
+> **步骤 1**：在 yml 里配 `logic-delete-value` / `logic-not-delete-value`（删除值和未删除值）。
+>
+> **步骤 2**：在**每一个**实体类的删除字段上**手动加 `@TableLogic` 注解**：
+>
+> ```
+> public class User {
+>     ...
+>     @TableLogic          // ← 这就是"步骤2"，每个实体都要加
+>     private Integer deleted;
+> }
+> ```
+>
+> 也就是说，旧版本里你有 N 张表用逻辑删除，就得在 N 个实体类里分别加 N 次 `@TableLogic`，很繁琐。
 
 测试：
 首先，我们执行一个删除操作：
@@ -1766,7 +1877,7 @@ public enum UserStatus {
 
 **要让MybatisPlus处理枚举与数据库类型自动转换，我们必须告诉MybatisPlus，枚举中的哪个字段的值作为数据库值。**
 
-**MybatisPlus提供了@EnumValue注解来标记枚举属性：**
+**MybatisPlus提供了`@EnumValue`注解来标记枚举属性：**
 
 ![](../SpringCloudImages/mp-feishu-42.png)
 
@@ -1802,13 +1913,301 @@ void testService() {
 
 ![](../SpringCloudImages/mp-feishu-45.png)
 
+![](../SpringCloudImages/2.png)
+
 最后，在页面查询，结果如下：
 
 ![](../SpringCloudImages/mp-feishu-46.png)
 
 
 
+> MyBatis-Plus 的**通用枚举**，意思是：**让你在 Java 里用"枚举类型"作为实体字段，而数据库里存的是对应的数字/字符串，两者之间的转换由 MyBatis-Plus 自动完成**——你不用手写枚举和数据库值之间的来回转换代码。
+>
+> 🔹解决的问题
+>
+> 不用通用枚举时，user 表的 `status` 字段（1正常/2冻结）在 Java 里通常是这样：
+>
+> ```java
+> private Integer status;   // 只能拿到 1 或 2，没语义
+> ```
+>
+> 代码里到处是 `if (status == 1)`、`if (status == 2)` 这种**魔法数字**，可读性差、容易写错。
+>
+> 而用通用枚举后：
+>
+> ```java
+> private UserStatus status;   // 直接是枚举，有语义
+> ```
+>
+> 代码里能写 `if (status == UserStatus.NORMAL)`，含义一目了然。**但数据库里依然存的是 1/2**，转换由框架自动搞定。
+>
+> 🔹怎么用（三步）
+>
+> 🔹第 1 步：定义枚举，用 `@EnumValue` 标记"存数据库的值"
+>
+> ```java
+> import com.baomidou.mybatisplus.annotation.EnumValue;
+> import lombok.Getter;
+> 
+> @Getter
+> public enum UserStatus {
+>     NORMAL(1, "正常"),
+>     FROZEN(2, "冻结");
+> 
+>     @EnumValue          // ★ 关键：告诉 MP 存数据库时用 code 这个值
+>     private final Integer code;
+>     private final String desc;
+> 
+>     UserStatus(Integer code, String desc) {
+>         this.code = code;
+>         this.desc = desc;
+>     }
+> }
+> ```
+>
+> **`@EnumValue` 是核心**——它告诉 MyBatis-Plus："这个枚举存进数据库时，用 `code` 字段的值（1/2），而不是枚举名字（NORMAL/FROZEN）。"
+>
+> 🔹第 2 步：实体类字段用枚举类型
+>
+> ```java
+> public class User {
+>     private Long id;
+>     private String username;
+>     private UserStatus status;   // ★ 用枚举，而不是 Integer
+> }
+> ```
+>
+> 🔹第 3 步：配置开启（视版本而定）
+>
+> 较新版本（3.5.2+）**通常无需额外配置**，自动扫描。老版本需要在 yml 指定枚举包：
+>
+> ```java
+> mybatis-plus:
+>   type-enums-package: com.itheima.mp.enums   # 枚举所在的包
+> ```
+>
+> 🔹自动转换效果
+>
+> 配好后，MyBatis-Plus 在读写时自动双向转换：
+>
+> | 操作      | 行为                                         |
+> | :-------- | :------------------------------------------- |
+> | 插入/更新 | Java 的 `UserStatus.NORMAL` → 数据库存 `1`   |
+> | 查询      | 数据库的 `1` → Java 拿到 `UserStatus.NORMAL` |
+>
+> 你的业务代码全程用枚举，**碰不到 1/2 这些数字**，转换对你透明。
+>
+> 🔹顺带一提：返回给前端时
+>
+> 如果直接把枚举返回给前端，默认会序列化成枚举名 `"NORMAL"`。想让前端拿到 `code`（1）或 `desc`（正常），可以：
+>
+> - 在要返回的字段上加 `@JsonValue`（Jackson 注解），指定序列化用哪个值。
+>
+> ```java
+> @JsonValue          // 返回给前端时用 desc
+> private final String desc;
+> ```
+>
+> 🔹`@EnumValue` vs `@TableLogic` 别搞混
+>
+> 你前面学了逻辑删除，这里再区分一下：
+>
+> | 注解          | 作用                                           |
+> | :------------ | :--------------------------------------------- |
+> | `@TableLogic` | 标记**逻辑删除**字段（deleted）                |
+> | `@EnumValue`  | 标记**枚举存数据库时用哪个值**（通用枚举专用） |
+>
+> 🔹一句话总结
+>
+> > 通用枚举 = **实体字段用枚举类型，数据库存数字/字符串，MyBatis-Plus 自动双向转换**。核心是在枚举字段上加 `@EnumValue` 指定"存库的值"。好处是代码里用 `UserStatus.NORMAL` 这种有语义的写法，告别满屏的 `status == 1` 魔法数字。
+
+
+
+#### 3.3.4 代码示例
+
+**以前的代码：**
+
+~~~
+@Service
+public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IUserService {
+    @Override
+    public void deductBalance(Long id, Integer money) {
+        // 1.查询用户
+        User user = getById(id);
+        // 2.判断用户状态
+        if (user == null || user.getStatus() == 2) {
+            throw new RuntimeException("用户状态异常");
+        }
+        // 3.判断用户余额
+        if (user.getBalance() < money) {
+            throw new RuntimeException("用户余额不足");
+        }
+        // 4.扣减余额
+//        baseMapper.deductMoneyById(id, money);
+        // 4.扣减余额 update tb_user set balance = balance - ?
+        int remainBalance = user.getBalance() - money;
+        lambdaUpdate()                                  	// ① 开启 lambda 更新链
+                .set(User::getBalance, remainBalance)       // ② SET balance = 新余额
+                .set(remainBalance == 0, User::getStatus, 2)// ③ 条件 SET：余额为0才把状态改成2
+                .eq(User::getId, id)                        // ④ WHERE id = ?
+                .eq(User::getBalance, user.getBalance())    // ⑤ WHERE balance = 旧余额（乐观锁）
+                .update();                                  // ⑥ 执行 UPDATE
+    }
+}
+~~~
+
+**现在的代码：**
+
+~~~java
+@Service
+public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements IUserService {
+    @Override
+    public void deductBalance(Long id, Integer money) {
+        // 1.查询用户
+        User user = getById(id);
+        // 2.判断用户状态
+        if (user == null || user.getStatus() == UserStatus.FREEZE) {
+            throw new RuntimeException("用户状态异常");
+        }
+        // 3.判断用户余额
+        if (user.getBalance() < money) {
+            throw new RuntimeException("用户余额不足");
+        }
+        // 4.扣减余额
+//        baseMapper.deductMoneyById(id, money);
+        // 4.扣减余额 update tb_user set balance = balance - ?
+        int remainBalance = user.getBalance() - money;
+        lambdaUpdate()                                  	// ① 开启 lambda 更新链
+                .set(User::getBalance, remainBalance)       // ② SET balance = 新余额
+                .set(remainBalance == 0, User::getStatus, UserStatus.FREEZE)// ③ 条件 SET：余额为0才把状态改成冻结
+                .eq(User::getId, id)                        // ④ WHERE id = ?
+                .eq(User::getBalance, user.getBalance())    // ⑤ WHERE balance = 旧余额（乐观锁）
+                .update();                                  // ⑥ 执行 UPDATE
+    }
+}
+~~~
+
+
+
+> **⭐问题：这里为什么查询出来的user，为什么status字段就已经是UserStatus枚举了，这是哪里控制的？**
+>
+> * User user = getById(id);
+>
+> 
+>
+> 好问题,这背后是 **MyBatis 的 TypeHandler(类型处理器)机制** 在起作用。链路是这样的:
+>
+> **🔹控制点:`MybatisEnumTypeHandler**`
+>
+> 就是你在 `application.yaml` 里配的这行:
+>
+> ```yml
+> mybatis-plus:
+>   configuration:
+>     default-enum-type-handler: com.baomidou.mybatisplus.core.handlers.MybatisEnumTypeHandler
+> ```
+>
+> 这行的意思是:**告诉 MyBatis,以后凡是遇到枚举类型的字段,都用 `MybatisEnumTypeHandler` 来处理"数据库值 ↔ Java 枚举"的转换。**
+>
+> **🔹查询时发生了什么(读:DB → Java)**
+>
+> `getById(id)` 底层执行的是 `SELECT * FROM user WHERE id=?`,拿到 `ResultSet` 后,MyBatis 要把每一列塞进 `User` 对象。到 `status` 这一列时:
+>
+> 1. MyBatis 发现 `User.status` 字段类型是**枚举** `UserStatus`;
+> 2. 于是调用 `MybatisEnumTypeHandler` 来处理这一列;
+> 3. 该 Handler 从数据库读出 `int` 值(比如 `2`);
+> 4. 它去 `UserStatus` 里找**哪个枚举常量的 `@EnumValue` 字段 == 2** → 找到 `FREEZE`;
+> 5. 把 `FREEZE` 这个枚举实例 set 进 `user.status`。
+>
+> 所以你拿到的 `user.getStatus()` 就已经是 `UserStatus.FREEZE` 了,不是数字 `2`。
+>
+> **🔹反过来写入时(写:Java → DB)**
+>
+> `save` / `update` 时同理,Handler 读 `@EnumValue` 标的那个字段值,把 `UserStatus.FREEZE` 转回 `2` 存进数据库。
+>
+> **🔹`@EnumValue` 在这里的关键作用**
+>
+> Handler 怎么知道"枚举 ↔ 数字"的对应关系?**全靠 `@EnumValue`**:
+>
+> ```java
+> @EnumValue   // ← Handler 就是认这个注解标的字段做转换依据
+> private final int value;
+> 
+> //例如示例里的这行代码：  .set(remainBalance == 0, User::getStatus, UserStatus.FREEZE)
+> ```
+>
+> - 没有它,Handler 不知道拿枚举的哪个属性去和数据库的列比对(默认会用 `name()` 或 `ordinal()`,就对不上 1/2 了)。
+> - 有了它,`NORMAL↔1`、`FREEZE↔2` 的映射就建立起来了。
+>
+> **🔹一句话总结**
+>
+> > **`User.status` 是枚举类型** + **配置了 `MybatisEnumTypeHandler`** + **枚举里有 `@EnumValue`**,三者凑齐,MyBatis 在把查询结果封装成对象时就自动把数字转成了枚举。控制权在那个 **TypeHandler**,转换规则由 **`@EnumValue`** 指定。
+
+
+
+> **⭐那@JsonValue是干嘛的**
+>
+> `@JsonValue` 是 **Jackson(Spring 默认的 JSON 工具)** 的注解,管的是**枚举 → 返回给前端的 JSON** 这一步。和数据库、MyBatis 完全没关系。
+>
+> 
+>
+> **🔹它解决什么问题**
+>
+> 你的接口返回对象时(比如查询用户返回 `UserVO`),Spring 要把 Java 对象转成 JSON。轮到 status 这个枚举字段时,Jackson 默认会用**枚举的名字 `name()`** 来序列化:
+>
+> ```java
+> // 不加 @JsonValue,默认输出枚举名
+> { "status": "FREEZE" }
+> ```
+>
+> 加上 `@JsonValue` 后,就是告诉 Jackson:**别用枚举名了,用我标注的这个字段的值**:
+>
+> ```java
+> @JsonValue
+> private final String desc;   // FREEZE 对应 "冻结"
+> ```
+>
+> 于是输出变成:
+>
+> ```java
+> // 加了 @JsonValue,输出 desc
+> { "status": "冻结" }
+> ```
+>
+> **🔹对比:换成别的标法会怎样**
+>
+> `@JsonValue` 标在哪个字段,就输出哪个字段的值:
+>
+> | `@JsonValue` 标在      | 前端收到的 status  |
+> | :--------------------- | :----------------- |
+> | 不加(默认)             | `"FREEZE"`(枚举名) |
+> | 标在 `desc` 上(你现在) | `"冻结"`           |
+> | 标在 `value` 上        | `2`(数字)          |
+>
+> **🔹和 `@EnumValue` 的区别(最关键)**
+>
+> 这两个注解长得像,但**管的阶段完全不同**,别搞混:
+>
+> | 注解         | 归谁管       | 作用阶段            | 控制什么                     |
+> | :----------- | :----------- | :------------------ | :--------------------------- |
+> | `@EnumValue` | MyBatis-Plus | **存/读数据库**时   | 数据库里存的值(`1`/`2`)      |
+> | `@JsonValue` | Jackson      | **返回前端 JSON**时 | 接口响应里显示的值(`"冻结"`) |
+>
+> **所以你现在的配置效果是:**
+>
+> - **数据库**里 status 存的是 `2`(`@EnumValue` 管的)
+> - **前端**收到的 status 是 `"冻结"`(`@JsonValue` 管的)
+> - **Java 代码**里 status 是 `UserStatus.FREEZE` 枚举
+>
+> 三个地方三种形态,各由对应的机制负责转换。`@JsonValue` 就是负责最后"给前端展示"这一环的。
+
+
+
 ### 3.4.JSON类型处理器
+
+> MyBatis-Plus 的 **JSON 类型处理器（JacksonTypeHandler 等）**，意思是：
+>
+> * **让数据库里存的 JSON 字符串，和 Java 里的对象（或 Map）之间自动互相转换**——读出来自动把 JSON 变成对象，存进去自动把对象变成 JSON 字符串。
 
 数据库的user表中有一个info字段，是JSON类型：
 
@@ -1882,6 +2281,35 @@ public class UserInfo {
 ![](../SpringCloudImages/mp-feishu-54.png)
 
 
+
+#### 3.4.3 代码示例
+
+> 如果没改之前的话，新增用户的时候body里的Info该如何传参？
+>
+> 
+>
+> 没改之前 `info` 是 `String` 类型,但数据库列是 JSON,所以你传的那个**字符串内容必须是合法 JSON**。因为外层 body 本身就是 JSON,里层的 info 是个字符串值,**双引号要转义**,写法是这样:
+>
+> ```java
+> {
+>   "username": "山阳",
+>   "password": "1234",
+>   "phone": "13800000000",
+>   "balance": 100,
+>   "info": "{\"age\":21,\"intro\":\"佩奇\",\"gender\":\"male\"}"
+> }
+> ```
+>
+> 改了之后，info是对象，不再是字符串
+>
+> ~~~java
+> {
+>   "username": "山阳",
+>   "info": { "age": 21, "intro": "佩奇", "gender": "male" }
+> }
+> ~~~
+>
+> 
 
 ### 3.5.配置加密（选学）
 
@@ -1957,12 +2385,12 @@ spring:
 
 **MybatisPlus提供了很多的插件功能，进一步拓展其功能。目前已有的插件有：**
 
-- PaginationInnerInterceptor：自动分页
-- TenantLineInnerInterceptor：多租户
-- DynamicTableNameInnerInterceptor：动态表名
-- OptimisticLockerInnerInterceptor：乐观锁
-- IllegalSQLInnerInterceptor：sql 性能规范
-- BlockAttackInnerInterceptor：防止全表更新与删除
+- PaginationInnerInterceptor：自动分页插件
+- TenantLineInnerInterceptor：多租户插件
+- DynamicTableNameInnerInterceptor：动态表名插件
+- OptimisticLockerInnerInterceptor：乐观锁插件
+- IllegalSQLInnerInterceptor：sql 性能规范插件，检测并拦截垃圾SQL
+- BlockAttackInnerInterceptor：防止全表更新与删除的插件
 
 >  **❗注意：**
 > **使用多个分页插件的时候需要注意插件定义顺序，建议使用顺序如下：**
