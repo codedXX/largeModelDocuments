@@ -50,7 +50,7 @@
 
 为了解决这个问题，SpringAMQP提供的消息发送时的重试机制。即：当`RabbitTemplate`与MQ连接超时后，多次重试。
 
-修改`publisher`模块的`application.yaml`文件，添加下面的内容：
+修改**`publisher`模块的`application.yaml`**文件，添加下面的内容：
 
 ```yaml
 spring:
@@ -259,6 +259,8 @@ void testPublisherConfirm() {
 - 路由失败：一般是因为RoutingKey错误导致，往往是编程导致
 - 交换机名称错误：同样是编程错误导致
 - MQ内部故障：这种需要处理，但概率往往较低。因此只有对消息可靠性要求非常高的业务才需要开启，而且仅仅需要开启ConfirmCallback处理nack就可以了。
+
+
 
 ## 2.MQ的可靠性
 
