@@ -1701,20 +1701,44 @@ POST /heima/_update/1
 
 ### 3.5.批处理
 
-批处理采用POST请求，基本语法如下：
+**批处理采用POST请求，基本语法如下：**
 
-```java
-POST _bulk
-{ "index" : { "_index" : "test", "_id" : "1" } }
-{ "field1" : "value1" }
+~~~java
+POST /_bulk
+//第一次新增请求
+{ "index" : { "_index" : "索引库名", "_id" : "1" } }
+{ "字段1" : "值1", "字段2" : "值2" }
+//第二次新增请求
+{ "index" : { "_index" : "索引库名", "_id" : "1" } }
+{ "字段1" : "值1", "字段2" : "值2" }
+//第三次新增请求
+{ "index" : { "_index" : "索引库名", "_id" : "1" } }
+{ "字段1" : "值1", "字段2" : "值2" }
 { "delete" : { "_index" : "test", "_id" : "2" } }
-{ "create" : { "_index" : "test", "_id" : "3" } }
-{ "field1" : "value3" }
-{ "update" : {"_id" : "1", "_index" : "test"} }
+{ "update" : { "_id" : "1", "_index" : "test" } }
 { "doc" : {"field2" : "value2"} }
-```
+~~~
 
-其中：
+> * **新增除了指定索引库和id以外，还要指定文档信息，文档信息就在第二行**
+>
+> * **上述的例子中就是一次bulk里携带了三次新增请求**
+>
+> * **delete的话就没有请求体了，只需要知道索引库名和id就够了**
+>
+> * **更新也需要请求体，所以也是两两一组**
+>
+>   * 这两是一组
+>
+>     * doc里指定要修改的字段
+>
+>     ~~~
+>     { "update" : { "_id" : "1", "_index" : "test" } }
+>     { "doc" : {"field2" : "value2"} }
+>     ~~~
+>
+>     
+
+**其中：**
 
 - `index`代表新增操作
   - `_index`：指定索引库名
@@ -1728,7 +1752,9 @@ POST _bulk
   - `_id`指定要操作的文档id
   - `{ "doc" : {"field2" : "value2"} }`：要更新的文档字段
 
-示例，批量新增：
+
+
+**示例，批量新增：**
 
 ```java
 POST /_bulk
@@ -1738,7 +1764,7 @@ POST /_bulk
 {"info": "黑马程序员前端讲师", "email": "zhangsan@itcast.cn", "name":{"firstName": "三", "lastName":"张"}}
 ```
 
-批量删除：
+**批量删除：**
 
 ```java
 POST /_bulk
@@ -1748,7 +1774,7 @@ POST /_bulk
 
 ### 3.6.总结
 
-文档操作有哪些？
+**文档操作有哪些？**
 
 - 创建文档：`POST /{索引库名}/_doc/文档id   { json文档 }`
 - 查询文档：`GET /{索引库名}/_doc/文档id`
@@ -1756,6 +1782,8 @@ POST /_bulk
 - 修改文档：
   - 全量修改：`PUT /{索引库名}/_doc/文档id { json文档 }`
   - 局部修改：`POST /{索引库名}/``_update``/文档id { "doc": ``{字段}``}`
+
+
 
 ## 4.RestAPI
 
@@ -1775,11 +1803,11 @@ https://www.elastic.co/guide/en/elasticsearch/client/index.html
 
 ### 4.1.初始化RestClient
 
-在elasticsearch提供的API中，与elasticsearch一切交互都封装在一个名为`RestHighLevelClient`的类中，必须先完成这个对象的初始化，建立与elasticsearch的连接。
+在elasticsearch提供的API中，与elasticsearch一切交互都封装在一个名为`RestHighLevelClient`的类中，必须先完成这个对象的初始化，**建立与elasticsearch的连接。**
 
-分为三步：
+**分为三步：**
 
-1）在`item-service`模块中引入`es`的`RestHighLevelClient`依赖：
+**1）在`item-service`模块中引入`es`的`RestHighLevelClient`依赖：**
 
 ```xml
 <dependency>
@@ -1788,7 +1816,7 @@ https://www.elastic.co/guide/en/elasticsearch/client/index.html
 </dependency>
 ```
 
-2）因为SpringBoot默认的ES版本是`7.17.10`，所以我们需要覆盖默认的ES版本：
+**2）因为SpringBoot默认的ES版本是`7.17.10`，所以我们需要覆盖默认的ES版本：**
 
 ```xml
   <properties>
@@ -1798,7 +1826,7 @@ https://www.elastic.co/guide/en/elasticsearch/client/index.html
   </properties>
 ```
 
-3）初始化RestHighLevelClient：
+**3）初始化RestHighLevelClient：**
 
 初始化的代码如下：
 
@@ -1807,6 +1835,8 @@ RestHighLevelClient client = new RestHighLevelClient(RestClient.builder(
         HttpHost.create("http://192.168.150.101:9200")
 ));
 ```
+
+
 
 这里为了单元测试方便，我们创建一个测试类`IndexTest`，然后将初始化的代码编写在`@BeforeEach`方法中：
 
@@ -1855,17 +1885,17 @@ public class IndexTest {
 
 ![](../SpringCloudImages/f08-032.png)
 
-实现搜索功能需要的字段包括三大部分：
+**实现搜索功能需要的字段包括三大部分：**
 
-- 搜索过滤字段
+- **搜索过滤字段**
   - 分类
   - 品牌
   - 价格
-- 排序字段
+- **排序字段**
   - 默认：按照更新时间降序排序
   - 销量
   - 价格
-- 展示字段
+- **展示字段**
   - 商品id：用于点击后跳转
   - 图片地址
   - 是否是广告推广商品
@@ -1874,7 +1904,9 @@ public class IndexTest {
   - 评价数量
   - 销量
 
-对应的商品表结构如下，索引库无关字段已经划掉：
+
+
+**对应的商品表结构如下，索引库无关字段已经划掉：**
 
 ![](../SpringCloudImages/f08-033.png)
 
@@ -1893,83 +1925,6 @@ public class IndexTest {
 | commentCount | integer | 评价，整数 |  |  | —— |
 | isAD | boolean | 布尔类型 |  |  | —— |
 | updateTime | Date | 更新时间 |  |  | —— |
-
-```
-字段名
-字段类型
-类型说明
-是否
-参与搜索
-是否
-参与分词
-分词器
-id
-long
-长整数
-[x]
-[]
-——
-name
-text
-字符串，参与分词搜索
-[x]
-[x]
-IK
-price
-integer
-以分为单位，所以是整数
-[x]
-[]
-——
-stock
-integer
-字符串，但需要分词
-[x]
-[]
-——
-image
-keyword
-字符串，但是不分词
-[]
-[]
-——
-category
-keyword
-字符串，但是不分词
-[x]
-[]
-——
-brand
-keyword
-字符串，但是不分词
-[x]
-[]
-——
-sold
-integer
-销量，整数
-[x]
-[]
-——
-commentCount
-integer
-评价，整数
-[]
-[]
-——
-isAD
-boolean
-布尔类型
-[x]
-[]
-——
-updateTime
-Date
-更新时间
-[x]
-[]
-——
-```
 
 因此，最终我们的索引库文档结构应该是这样：
 
@@ -2161,7 +2116,7 @@ JavaRestClient操作elasticsearch的流程基本类似。核心是`client.indice
 
 ## 5.RestClient操作文档
 
-索引库准备好以后，就可以操作文档了。为了与索引库操作分离，我们再次创建一个测试类，做两件事情：
+**索引库准备好以后，就可以操作文档了。为了与索引库操作分离，我们再次创建一个测试类，做两件事情：**
 
 - 初始化RestHighLevelClient
 - 我们的商品数据在数据库，需要利用IHotelService去查询，所以注入这个接口
