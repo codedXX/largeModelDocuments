@@ -1555,23 +1555,33 @@ public class IndexTest {
 
 ![](../SpringCloudImages/f08-033.png)
 
-结合数据库表结构，以上字段对应的mapping映射属性如下：
+> ⭐判断**是否需要保存到ES**里的依据就是：
+>
+> * 是否需要展示在页面上
+>
+> 
+>
+> ⭐**image之所以需要保存到ES中，是因为需要展示在页面上，但不参与搜索，因为没人会用url去搜索**
+
+
+
+**结合数据库表结构，以上字段对应的mapping映射属性如下：**
 
 | 字段名 | 字段类型 | 类型说明 | 是否参与搜索 | 是否参与分词 | 分词器 |
 | --- | --- | --- | --- | --- | --- |
-| id | long | 长整数 |  |  | —— |
-| name | text | 字符串，参与分词搜索 |  |  | IK |
-| price | integer | 以分为单位，所以是整数 |  |  | —— |
-| stock | integer | 字符串，但需要分词 |  |  | —— |
-| image | keyword | 字符串，但是不分词 |  |  | —— |
-| category | keyword | 字符串，但是不分词 |  |  | —— |
-| brand | keyword | 字符串，但是不分词 |  |  | —— |
-| sold | integer | 销量，整数 |  |  | —— |
-| commentCount | integer | 评价，整数 |  |  | —— |
-| isAD | boolean | 布尔类型 |  |  | —— |
-| updateTime | Date | 更新时间 |  |  | —— |
+| id | long | 长整数 | ✅ | ❌ | —— |
+| name | text | 字符串，参与分词搜索 | ✅ | ✅ | IK |
+| price | integer | 以分为单位，所以是整数 | ✅ | ❌ | —— |
+| stock | integer | 字符串，但需要分词 | ✅ | ❌ | —— |
+| image | keyword | 字符串，但是不分词 | ❌ | ❌ | —— |
+| category | keyword | 字符串，但是不分词 | ✅ | ❌ | —— |
+| brand | keyword | 字符串，但是不分词 | ✅ | ❌ | —— |
+| sold | integer | 销量，整数 | ✅ | ❌ | —— |
+| commentCount | integer | 评价，整数 | ❌ | ❌ | —— |
+| isAD | boolean | 布尔类型 | ✅ | ❌ | —— |
+| updateTime | Date | 更新时间 | ✅ | ❌ | —— |
 
-因此，最终我们的索引库文档结构应该是这样：
+**因此，最终我们的索引库文档结构应该是这样：**
 
 ```json
 PUT /items
@@ -1619,13 +1629,30 @@ PUT /items
 }
 ```
 
+> **image和commentCount不需要搜索或排序，所以index为false**
+
+
+
 #### 4.1.2.创建索引
 
 创建索引库的API如下：
 
 ![](../SpringCloudImages/f08-034.jpg)
 
-代码分为三步：
+> **这里为什么用的client.indices里用的create方法，但右边说用PUT,新增不是POST吗？**
+>
+> * 在 Elasticsearch 里，创建索引（create index）就是用 PUT，不是 POST。这里的“新增”指的是新增一个索引库，而不是新增一条文档。
+>   区别如下：
+>
+> * | 操作                  | HTTP 方法 | 示例              | 说明                     |
+>   | --------------------- | --------- | ----------------- | ------------------------ |
+>   | 创建索引              | PUT       | PUT /items        | 索引名由调用方指定，幂等 |
+>   | 新增文档（指定 ID）   | PUT       | PUT /items/_doc/1 | ID 由调用方指定          |
+>   | 新增文档（不指定 ID） | POST      | POST /items/_doc  | ES 自动生成 ID           |
+>
+> * client.indices().create() 里的 create 是 Java 客户端的方法命名，底层发的就是 PUT /items。indices() 表示这是针对索引的操作，不是针对文档的增删改查。
+
+**代码分为三步：**
 
 - 1）创建Request对象。
   - 因为是创建索引库的操作，因此Request是`CreateIndexRequest`。
@@ -1634,7 +1661,9 @@ PUT /items
 - 3）发送请求
   - `client.``indices``()`方法的返回值是`IndicesClient`类型，封装了所有与索引库操作有关的方法。例如创建索引、删除索引、判断索引是否存在等
 
-在`item-service`中的`IndexTest`测试类中，具体代码如下：
+
+
+**在`item-service`中的`IndexTest`测试类中，具体代码如下：**
 
 ```java
 @Test
@@ -1695,7 +1724,7 @@ static final String MAPPING_TEMPLATE = "{\n" +
 删除索引库的请求非常简单：
 
 ```json
-DELETE /hotel
+DELETE /items
 ```
 
 与创建索引库相比：
@@ -1727,7 +1756,7 @@ void testDeleteIndex() throws IOException {
 判断索引库是否存在，本质就是查询，对应的请求语句是：
 
 ```json
-GET /hotel
+GET /items
 ```
 
 因此与删除的Java代码流程是类似的，流程如下：
