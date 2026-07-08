@@ -1233,6 +1233,8 @@ GET /heima
 >
 > * **无法修改mapping中已有的字段，但是却允许添加新的字段到mapping中**
 
+
+
 **语法说明**：
 
 ```json
@@ -1283,10 +1285,12 @@ DELETE /heima
 
 **索引库操作有哪些？**
 
-- 创建索引库：PUT /索引库名
-- 查询索引库：GET /索引库名
-- 删除索引库：DELETE /索引库名
-- 修改索引库，添加字段：PUT /索引库名/_mapping
+- **创建索引库**：PUT /索引库名
+- **查询索引库**：GET /索引库名
+- **删除索引库**：DELETE /索引库名
+- **修改索引库**，添加字段：PUT /索引库名/_mapping
+
+
 
 可以看到，对索引库的操作基本遵循的Restful的风格，因此API接口非常统一，方便记忆。
 
@@ -1295,6 +1299,8 @@ DELETE /heima
 有了索引库，接下来就可以向索引库中添加数据了。
 
 Elasticsearch中的数据其实就是JSON风格的文档。操作文档自然保护`增`、`删`、`改`、`查`等几种常见操作，我们分别来学习。
+
+
 
 ### 3.1.新增文档
 
@@ -1349,6 +1355,23 @@ GET /heima/_doc/1
 **查看结果：**
 
 ![](../SpringCloudImages/f08-025.png)
+
+> * 【GET /{索引库名称}/_doc/{id} 】 这种方式只**能获取单个文档**。
+>
+> * **查询所有文档使用_search**
+>
+>   * ~~~
+>     GET /heima/_search
+>     {
+>       "query": {
+>         "match_all": {}
+>       }
+>     }
+>     ~~~
+>
+>   * **不加 query 体直接 GET /heima/_search 也行，默认返回 10 条。**
+
+
 
 ### 3.3.删除文档
 
@@ -1564,6 +1587,8 @@ https://www.elastic.co/guide/en/elasticsearch/client/java-rest/7.17/index.html
 
 在elasticsearch提供的API中，与elasticsearch一切交互都封装在一个名为`RestHighLevelClient`的类中，必须先完成这个对象的初始化，**建立与elasticsearch的连接。**
 
+
+
 **分为三步：**
 
 **1）在`item-service`模块中引入`es`的`RestHighLevelClient`依赖：**
@@ -1633,6 +1658,8 @@ public class IndexTest {
     }
 }
 ```
+
+
 
 ### 4.1.创建索引库
 
@@ -1768,11 +1795,11 @@ PUT /items
 
 **代码分为三步：**
 
-- 1）创建Request对象。
+- 1）**创建Request对象。**
   - 因为是创建索引库的操作，因此Request是`CreateIndexRequest`。
-- 2）添加请求参数
+- 2）**添加请求参数**
   - 其实就是Json格式的Mapping映射参数。因为json字符串很长，这里是定义了静态字符串常量`MAPPING_TEMPLATE`，让代码看起来更加优雅。
-- 3）发送请求
+- 3）**发送请求**
   - `client.``indices``()`方法的返回值是`IndicesClient`类型，封装了所有与索引库操作有关的方法。例如创建索引、删除索引、判断索引是否存在等
 
 
@@ -1782,9 +1809,9 @@ PUT /items
 ```java
 @Test
 void testCreateIndex() throws IOException {
-    // 1.创建Request对象
+    // 1.创建Request对象,指定索引名称为 "items"
     CreateIndexRequest request = new CreateIndexRequest("items");
-    // 2.准备请求参数
+    // 2.准备请求参数,设置请求体内容，MAPPING_TEMPLATE 是索引的 mapping 定义 JSON 字符串，XContentType.JSON 指明内容格式为 JSON
     request.source(MAPPING_TEMPLATE, XContentType.JSON);
     // 3.发送请求
     client.indices().create(request, RequestOptions.DEFAULT);
@@ -1832,6 +1859,8 @@ static final String MAPPING_TEMPLATE = "{\n" +
             "  }\n" +
             "}";
 ```
+
+
 
 ### 4.2.删除索引库
 
@@ -2025,7 +2054,7 @@ POST /{索引库名}/_doc/1
 
 >**为什么写法是client.index ？**
 >
->* 因为index就代表新增文档
+>* 因为⭐**index就代表新增文档**
 
 
 
@@ -2065,18 +2094,18 @@ POST /{索引库名}/_doc/1
 ```java
 @Test
 void testAddDocument() throws IOException {
-    // 1.根据id查询商品数据
+    // 1.从数据库按主键查询 id=100002644680 的商品数据
     Item item = itemService.getById(100002644680L);
-    // 2.转换为文档类型
+    // 2.转换为文档类型,利用 Hutool 将 Item 对象属性拷贝到 ItemDoc（ES 文档对象），方便后续写入 ES
     ItemDoc itemDoc = BeanUtil.copyProperties(item, ItemDoc.class);
-    // 3.将ItemDTO转json
+    // 3.将 ItemDoc 对象序列化为 JSON 字符串，准备写入 ES
     String doc = JSONUtil.toJsonStr(itemDoc);
 
-    // 1.准备Request对象
+    // 1.准备Request对象：创建索引请求对象，指定写入索引名 "items"，并用商品 id 作为文档 _id（ES 中用相同 _id 会覆盖更新）
     IndexRequest request = new IndexRequest("items").id(itemDoc.getId());
-    // 2.准备Json文档
+    // 2.准备Json文档：将 JSON 字符串设置为请求体，指定格式为 JSON
     request.source(doc, XContentType.JSON);
-    // 3.发送请求
+    // 3.发送请求：通过 ES 客户端发送请求，将文档写入 "items" 索引
     client.index(request, RequestOptions.DEFAULT);
 }
 ```
@@ -2093,23 +2122,29 @@ void testAddDocument() throws IOException {
 GET /{索引库名}/_doc/{id}
 ```
 
-与之前的流程类似，代码大概分2步：
+**与之前的流程类似，代码大概分2步：**
 
 - 创建Request对象
 - ~~准备请求参数，这里是无参，直接省略~~
 - 发送请求
 
+
+
 不过查询的目的是得到结果，解析为ItemDTO，还要再加一步对结果的解析。示例代码如下：
 
 ![](../SpringCloudImages/f08-036.png)
 
-可以看到，响应结果是一个JSON，其中文档放在一个`_source`属性中，因此解析就是拿到`_source`，反序列化为Java对象即可。
+**可以看到，响应结果是一个JSON，其中文档放在一个`_source`属性中，因此解析就是拿到`_source`，反序列化为Java对象即可。**
 
-其它代码与之前类似，流程如下：
+
+
+**其它代码与之前类似，流程如下：**
 
 - 1）准备Request对象。这次是查询，所以是`GetRequest`
 - 2）发送请求，得到结果。因为是查询，这里调用`client.get()`方法
 - 3）解析结果，就是对JSON做反序列化
+
+
 
 #### 5.2.2.完整代码
 
@@ -2130,6 +2165,8 @@ void testGetDocumentById() throws IOException {
 }
 ```
 
+
+
 ### 5.3.删除文档
 
 删除的请求语句如下：
@@ -2138,11 +2175,15 @@ void testGetDocumentById() throws IOException {
 DELETE /hotel/_doc/{id}
 ```
 
-与查询相比，仅仅是请求方式从`DELETE`变成`GET`，可以想象Java代码应该依然是2步走：
+
+
+**与查询相比，仅仅是请求方式从`DELETE`变成`GET`，可以想象Java代码应该依然是2步走：**
 
 - 1）准备Request对象，因为是删除，这次是`DeleteRequest`对象。要指定索引库名和id
 - 2）~~准备参数，无参，直接省略~~
 - 3）发送请求。因为是删除，所以是`client.delete()`方法
+
+
 
 在`item-service`的`DocumentTest`测试类中，编写单元测试：
 
@@ -2156,17 +2197,23 @@ void testDeleteDocument() throws IOException {
 }
 ```
 
+
+
 ### 5.4.修改文档
 
-修改我们讲过两种方式：
+**修改我们讲过两种方式：**
 
 - 全量修改：本质是先根据id删除，再新增
 - 局部修改：修改文档中的指定字段值
 
-在RestClient的API中，全量修改与新增的API完全一致，判断依据是ID：
+
+
+**在RestClient的API中，全量修改与新增的API完全一致，判断依据是ID：**
 
 - 如果新增时，ID已经存在，则修改
 - 如果新增时，ID不存在，则新增
+
+
 
 这里不再赘述，我们主要关注局部修改的API即可。
 
@@ -2188,11 +2235,13 @@ POST /{索引库名}/_update/{id}
 
 ![](../SpringCloudImages/f08-037.png)
 
-与之前类似，也是三步走：
+**与之前类似，也是三步走：**
 
 - 1）准备`Request`对象。这次是修改，所以是`UpdateRequest`
 - 2）准备参数。也就是JSON文档，里面包含要修改的字段
 - 3）更新文档。这里调用`client.update()`方法
+
+
 
 #### 5.4.2.完整代码
 
@@ -2213,11 +2262,13 @@ void testUpdateDocument() throws IOException {
 }
 ```
 
+
+
 ### 5.5.批量导入文档
 
 在之前的案例中，我们都是操作单个文档。而数据库中的商品数据实际会达到数十万条，某些项目中可能达到数百万条。
 
-我们如果要将这些数据导入索引库，肯定不能逐条导入，而是采用批处理方案。常见的方案有：
+**我们如果要将这些数据导入索引库，肯定不能逐条导入，而是采用批处理方案。常见的方案有：**
 
 - 利用Logstash批量导入
   - 需要安装Logstash
@@ -2227,30 +2278,38 @@ void testUpdateDocument() throws IOException {
   - 需要编码，但基于JavaAPI，学习成本低
   - 更加灵活，可以任意对数据做再加工处理后写入索引库
 
+
+
 接下来，我们就学习下如何利用JavaAPI实现批量文档导入。
 
 #### 5.5.1.语法说明
 
-批处理与前面讲的文档的CRUD步骤基本一致：
+**批处理与前面讲的文档的CRUD步骤基本一致：**
 
 - 创建Request，但这次用的是`BulkRequest`
 - 准备请求参数
 - 发送请求，这次要用到`client.bulk()`方法
 
-`BulkRequest`本身其实并没有请求参数，其本质就是将多个普通的CRUD请求组合在一起发送。例如：
+
+
+**`BulkRequest`本身其实并没有请求参数，其本质就是将多个普通的CRUD请求组合在一起发送。例如：**
 
 - 批量新增文档，就是给每个文档创建一个`IndexRequest`请求，然后封装到`BulkRequest`中，一起发出。
 - 批量删除，就是创建N个`DeleteRequest`请求，然后封装到`BulkRequest`，一起发出
+
+
 
 因此`BulkRequest`中提供了`add`方法，用以添加其它CRUD的请求：
 
 ![](../SpringCloudImages/f08-038.png)
 
-可以看到，能添加的请求有：
+**可以看到，能添加的请求有：**
 
 - `IndexRequest`，也就是新增
 - `UpdateRequest`，也就是修改
 - `DeleteRequest`，也就是删除
+
+
 
 因此Bulk中添加了多个`IndexRequest`，就是批量新增功能了。示例：
 
@@ -2309,7 +2368,7 @@ void testLoadItemDocs() throws IOException {
 
 ### 5.6.小结
 
-文档操作的基本步骤：
+**文档操作的基本步骤：**
 
 - 初始化`RestHighLevelClient`
 - 创建XxxRequest。
