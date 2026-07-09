@@ -426,8 +426,8 @@ GET /items/_search
 >
 >* | 子句     | 作用                             | 本查询中的表现                            |
 >  | -------- | -------------------------------- | ----------------------------------------- |
->  | `must`   | 必须匹配，参与打分               | `match` 对 `name` 做全文检索，贡献基础分  |
->  | `should` | 有 `must` 时变为加分项，参与打分 | `brand` 是 `vivo/小米` 的文档获得额外加分 |
+>   | `must`   | 必须匹配，参与打分               | `match` 对 `name` 做全文检索，贡献基础分  |
+>   | `should` | 有 `must` 时变为加分项，参与打分 | `brand` 是 `vivo/小米` 的文档获得额外加分 |
 >
 >  不参与打分（得分贡献为 0）：
 >
@@ -1196,29 +1196,43 @@ https://www.elastic.co/guide/en/elasticsearch/reference/7.12/search-aggregations
 
 
 
-**聚合常见的有三类：**
+聚合（aggregations）可以实现对文档数据的统计、分析、运算。**聚合常见的有三类：**
 
-- **桶（`Bucket`）**聚合：用来对文档做分组
-  - `TermAggregation`：按照文档字段值分组，例如按照品牌值分组、按照国家分组
-  - `Date Histogram`：按照日期阶梯分组，例如一周为一组，或者一月为一组
-- **度量（`Metric`）**聚合：用以计算一些值，比如：最大值、最小值、平均值等
-  - `Avg`：求平均值
-  - `Max`：求最大值
-  - `Min`：求最小值
-  - `Stats`：同时求`max`、`min`、`avg`、`sum`等
-- **管道（`pipeline`）**聚合：其它聚合的结果为基础做进一步运算
+- **桶（Bucket）聚合：用来对文档做分组**
+  - TermAggregation：按照**文档字段值**分组
+  - Date Histogram：按照**日期阶梯**分组，例如一周为一组，或者一月为一组
+- **度量（Metric）聚合：用以计算一些值，比如：最大值、最小值、平均值等**
+  - Avg：求平均值
+  - Max：求最大值
+  - Min：求最小值
+  - Stats：同时求max、min、avg、sum等
+- **管道（pipeline）聚合：其它聚合的结果为基础做聚合**
 
 
 
-**注意：**参加聚合的字段必须是keyword、日期、数值、布尔类型
+> ⭐**TermAggregation 是按照词条的值来进行分组，意思就是：**
+>
+> * 比如说现在这个词条针对的是品牌这个字段，现在我去看一下，品牌值一样的就放一个组
+
+
+
+> * **管道聚合的数据是：其他聚合的结果**
+>
+> * **其他聚合（桶聚合、度量聚合）的数据是：文档**
+
+
+
+
+
+> ⭐⭐⭐**注意：**参加聚合的字段必须是keyword、日期、数值、布尔类型⭐⭐⭐
+>
+> * 因为参加聚合的字段只能是**不分词的字段**
 
 
 
 
 
 ### 3.1.DSL实现聚合
-
-与之前的搜索功能类似，我们依然先学习DSL的语法，再学习JavaAPI.
 
 #### 3.1.1.Bucket聚合
 
@@ -1227,14 +1241,16 @@ https://www.elastic.co/guide/en/elasticsearch/reference/7.12/search-aggregations
 基本语法如下：
 
 ```json
+# 就像 select category,count(*) from items group by category  这个sql语句
 GET /items/_search
 {
-  "size": 0, 
-  "aggs": {
-    "category_agg": {
-      "terms": {
-        "field": "category",
-        "size": 20
+  "query": {"match_all": {}},  // 可以省略
+  "size": 0,  // 设置size为0，结果中不包含文档，只包含聚合结果
+  "aggs": {  // 定义聚合
+    "cateAgg": {  // 给聚合起个名字
+      "terms": {  // 聚合的类型，按照品牌值聚合，所以选择term
+        "field": "category",  // 参与聚合的字段
+        "size": 20  // 希望获取的聚合结果数量
       }
     }
   }
@@ -1314,6 +1330,12 @@ GET /items/_search
 }
 ```
 
+> 在上述的代码里：
+>
+> * terms 聚合会按 brand 字段的值分组，每个不同的品牌值就是一个**`桶`**，最多返回 20 个。
+
+
+
 聚合结果如下：
 
 ```json
@@ -1357,9 +1379,9 @@ GET /items/_search
 
 #### 3.1.3.Metric聚合
 
-上节课，我们统计了价格高于3000的手机品牌，形成了一个个桶。现在我们需要对桶内的商品做运算，获取每个品牌价格的最小值、最大值、平均值。
+上节课，我们统计了价格高于3000的手机品牌，形成了一个个**桶**。现在我们需要对桶内的商品做运算，获取每个品牌价格的最小值、最大值、平均值。
 
-这就要用到`Metric`聚合了，例如`stat`聚合，就可以同时获取`min`、`max`、`avg`等结果。
+这就要用到**`Metric`聚合了，例如`stat`聚合**，就可以同时获取`min`、`max`、`avg`等结果。
 
 语法如下：
 
@@ -1409,9 +1431,9 @@ GET /items/_search
 
 **可以看到我们在`brand_agg`聚合的内部，我们新加了一个`aggs`参数。这个聚合就是`brand_agg`的子聚合，会对`brand_agg`形成的每个桶中的文档分别统计。**
 
-- `stats_meric`：聚合名称
-  - `stats`：聚合类型，stats是`metric`聚合的一种
-    - `field`：聚合字段，这里选择`price`，统计价格
+- **`stats_meric`：**聚合名称
+  - **`stats`：**聚合类型，stats是`metric`聚合的一种
+    - **`field`：**聚合字段，这里选择`price`，统计价格
 
 
 
