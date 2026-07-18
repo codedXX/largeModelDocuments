@@ -33,9 +33,15 @@ HTTP是一种应用层协议，使用TCP作为传输层协议，默认端口是8
 
 ### 1.2、MQTT协议概述
 
+> **⭐️MQTT就是硬件和后台服务之间的交互可以基于MQTT这个协议进行完成**
+
+![share-jgt](../SpringAiProjectImages/12.png)
+
 #### 1.2.1、MQTT的基本概念
 
-MQTT是一个基于客户端-服务器的消息发布/订阅传输协议。使用TCP协议进行传输，端口为1883（非加密）和8883（加密），客户端通过发布（Publish）消息到某个主题（Topic），而其他订阅（Subscribe）该主题的客户端会接收到消息。协议是轻量、简单、开放和易于实现的，这些特点使它适用范围非常广泛。在很多情况下，包括受限的环境中，如：机器与机器（M2M）通信和物联网（IoT）。其在，通过卫星链路通信传感器、偶尔拨号的医疗设备、智能家居、及一些小型化设备中已广泛使用。
+MQTT是一个基于**客户端-服务器的消息发布/订阅**传输协议。使用TCP协议进行传输，端口为1883（非加密）和8883（加密），客户端通过发布**（Publish）消息到某个主题（Topic），而其他**订阅**（Subscribe）该主题的客户端会接收到消息。协议是轻量、简单、开放和易于实现的，这些特点使它适用范围非常广泛。在很多情况下，包括受限的环境中，如：机器与机器（M2M）通信和物联网（IoT）。其在，通过卫星链路通信传感器、偶尔拨号的医疗设备、智能家居、及一些小型化设备中已广泛使用。
+
+![share-jgt](../SpringAiProjectImages/13.png)
 
 #### 1.2.2、MQTT的基本结构
 
@@ -144,9 +150,10 @@ public class MqttTest {
         MemoryPersistence persistence = new MemoryPersistence();
 
         try {
+          	//创建mqtt客户端
             MqttClient client = new MqttClient(broker, clientId, persistence);
 
-            // MQTT 连接选项
+            // 连接MQTT
             MqttConnectOptions connOpts = new MqttConnectOptions();
             connOpts.setUserName("emqx_test");
             connOpts.setPassword("emqx_test_password".toCharArray());
@@ -183,10 +190,10 @@ public class MqttTest {
             System.out.println("Connected");
             System.out.println("Publishing message: " + content);
 
-            // 订阅
+            // 订阅topic
             client.subscribe(subTopic);
 
-            // 消息发布所需参数
+            // 发送消息
             MqttMessage message = new MqttMessage(content.getBytes());
             message.setQos(qos);
             client.publish(pubTopic, message);
