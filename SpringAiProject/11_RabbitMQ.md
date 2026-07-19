@@ -288,13 +288,13 @@ public class TestReceiver {
 
 #### 3.3.1、介绍
 
-MQ消息的可靠性，一般需要三个方面一起保证：
+**MQ消息的可靠性，一般需要三个方面一起保证：**
 
 1. 生产者不丢数据
 2. MQ服务器不丢数据
 3. 消费者不丢数据
 
-保证消息不丢失有两种实现方式：
+**保证消息不丢失有两种实现方式：**
 
 - 开启事务模式
 - 消息息确认模式（生产者，消费者）
@@ -455,7 +455,7 @@ public class GuiguCorrelationData extends CorrelationData {
 }
 ```
 
-##### xxxxxxxxxx <?xml version="1.0" encoding="UTF-8" ?><!DOCTYPE mapper        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"        "http://mybatis.org/dtd/mybatis-3-mapper.dtd"><mapper namespace="com.share.rules.mapper.FeeRuleMapper">​    <resultMap type="FeeRule" id="FeeRuleResult" autoMapping="true">    </resultMap>​    <sql id="selectFeeRuleVo">        select id, name, rule, description, status, create_time, create_by, update_time, update_by, del_flag, remark from fee_rule    </sql>​    <select id="selectFeeRuleList" parameterType="FeeRule" resultMap="FeeRuleResult">        <include refid="selectFeeRuleVo"/>        <where>            <if test="name != null  and name != ''"> and name like concat('%', #{name}, '%')</if>            <if test="status != null  and status != ''"> and status = #{status}</if>            and del_flag = 0        </where>    </select>​</mapper>xml
+##### 2、RabbitService
 
 修改发送方法
 
@@ -583,7 +583,7 @@ public class RabbitInitConfigApplicationListener implements ApplicationListener<
 
 ### 3.4、延迟消息
 
-延迟消息有两种实现方案：
+**延迟消息有两种实现方案：**
 
 1，基于死信队列
 
