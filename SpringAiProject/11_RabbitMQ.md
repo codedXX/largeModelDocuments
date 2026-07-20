@@ -1189,7 +1189,7 @@ public class OrderReceiver {
 Long saveOrder(SubmitOrderVo orderForm);
 ```
 
-#### 4.2.2、OrderInfoServiceI
+#### 4.2.2、OrderInfoServiceImpl
 
 ```java
 @Autowired
