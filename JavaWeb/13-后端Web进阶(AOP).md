@@ -803,6 +803,35 @@ public class MyAspect6 {
 }
 ```
 
+> **注意：**
+>
+> * **@annotation(全类名)**的写法不需要额外增加一个参数
+> * **@annotation(变量名)**的写法就需要额外增加一个参数。
+>   * 这种写法：方法签名里必须有第二个参数 LogOperation logOperation，**名字要和表达式里的 logExecutionTime 一致**。Spring 会把方法上那个注解实例自动绑定进来。
+>
+> ~~~java
+> @Slf4j
+> @Component
+> @Aspect
+> public class MyAspect6 {
+>     //针对 list 方法、delete 方法进行前置通知和后置通知
+> 
+>     //前置通知
+>     @Before("@annotation(logOperation)")
+>     public void before(LogOperation logOperation){
+>         log.info("MyAspect6 -> before ...");
+>     }
+> 
+>     //后置通知
+>     @After("@annotation(logOperation)")
+>     public void after(LogOperation logOperation){
+>         log.info("MyAspect6 -> after ...");
+>     }
+> }
+> ~~~
+>
+> 
+
 重启 SpringBoot 服务，测试查询所有部门数据，查看控制台日志：
 
 ![@annotation 切入点表达式测试结果](../JavaWebImages/aop-annotation-test-console.png)
