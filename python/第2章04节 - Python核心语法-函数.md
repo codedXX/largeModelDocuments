@@ -430,13 +430,114 @@ print(data)
 
 #### 类型注解
 
+类型注解是 Python 中的一种语法特性，用于明确标识变量、函数参数和返回值的数据类型，从而使代码更清晰、更安全、更易维护。
+
+```python
+# 定义变量
+a = 695
+
+score = 98.5
+
+hobby = "Python"
+
+flag = True
+
+pic = None
+
+names = ["A", "C", "E"]
+
+phones = {"13309091111", "15209109121"}
+
+options = {"count": 0, "total": 0}
+
+goods = ("手机", 5999, 1)
+```
+
+添加类型注解后：
+
+```python
+# 定义变量
+a: int = 695
+
+score: float = 98.5
+
+hobby: str = "Python"
+
+flag: bool = True
+
+pic: None = None
+
+names: list[str] = ["A", "C", "E"]
+
+phones: set[str] = {"13309091111", "15209109121"}
+
+options: dict[str, int] = {"count": 0, "total": 0}
+
+goods: tuple[str, int, int] = ("手机", 5999, 1)
+```
+
+
+
 #### 类型判断
+
+类型推断是指 Python 解释器自动推断出变量、表达式或函数返回值的数据类型的能力，而无需开发者显式声明。
+
+```python
+a = 695
+
+score = 98.5
+
+hobby = "Python"
+
+flag = True
+
+pic = None
+
+names = ["A", "C", "E"]
+
+phones = {"13309091111", "15209109121"}
+
+options = {"count": 0, "total": 0}
+
+goods = ("手机", 5999, 1)
+a = 695
+
+score = 98.5
+
+hobby = "football"
+
+flag = True
+
+pic = None
+
+names: list[str] = ["张三", "李四", "王五"]
+
+goods = ("鼠标", "键盘", "USB")
+```
+
+> **注意：** 在对变量进行直接赋值，或者涉及变量的运算、容器的推导等场景时，解释器会自动推导出变量的类型。
+
+
 
 #### 小结
 
+1. 类型注解的写法？
+   - 变量：数据类型，例如 `a: int`
+2. 常见类型的写法
+   - `int`、`float`、`bool`、`str`、`None`、`list`、`set`、`tuple`、`dict`
+   - `str | int`
+3. 为什么要使用类型注解，有什么好处呢？
+   - 代码结构更清晰、代码逻辑更安全、易维护
+   - 更准确的代码自动提示
+   - 提前发现代码潜在问题
 
+> **注意：** Python 是动态类型语言，添加的类型注解只是提示，并不是强制约束！
 
 ### 函数类型注解
+
+为函数添加类型注解，其实主要就是为函数的参数和返回值添加类型注解，具体语法如下：
+
+![课件图示](../pythonImages/19.png)
 
 ## lambda 与类型注解
 
