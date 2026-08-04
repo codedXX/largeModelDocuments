@@ -206,7 +206,7 @@ data = {"姓名":["王林", "李慕婉", "贝罗", "莫厉海", "石萧", "红�
 st.table(data)
 ~~~
 
-
+![课件图示](../pythonImages/46.png)
 
 #### 小结
 
@@ -279,8 +279,6 @@ st.table(data)
 
 - 日常我们操作文件时，基本分为三步操作：打开、读/写、关闭。
 
-- 如果操作文件过程中出现了异常，文件就无法关闭了，怎么解决？
-
   ~~~python
   # 1. 打开文件
   f = open("resources/静夜思.txt", "w", encoding="utf-8")
@@ -293,7 +291,44 @@ st.table(data)
   f.close()
   ~~~
 
-  
+
+
+
+> ⭐**如果操作文件过程中出现了异常，文件就无法关闭了，怎么解决？**
+>
+> 
+>
+> 使用 `with open(...) as f:`。无论写入过程中是否发生异常，Python 都会在代码块结束时自动关闭文件。
+>
+> python
+>
+> ```python
+> with open("resources/静夜思.txt", "w", encoding="utf-8") as f:
+>     f.write("窗前明月光，\n")
+>     f.write("疑是地上霜。\n")
+>     f.write("举头望明月，\n")
+>     f.write("低头思故乡。\n")
+> ```
+>
+> 这样不需要手动调用 `f.close()`。
+>
+> 也可以用 `try...finally`，确保 `finally` 中的关闭操作一定执行：
+>
+> python
+>
+> ```python
+> f = open("resources/静夜思.txt", "w", encoding="utf-8")
+> 
+> try:
+>     f.write("窗前明月光，\n")
+>     f.write("疑是地上霜。\n")
+>     f.write("举头望明月，\n")
+>     f.write("低头思故乡。\n")
+> finally:
+>     f.close()
+> ```
+>
+> 实际开发中，优先使用 `with`，代码更简洁，也更不容易遗漏关闭文件。
 
 
 
@@ -350,7 +385,6 @@ f.close()
 > f.close()
 > ~~~
 >
-> 
 
 
 
@@ -388,14 +422,13 @@ f.close()
 
     
 
-> 提示：`with` 语句（上下文管理器）的核心作用就是确保资源的总是被正确获取和释放（即使发生异常，也会被正确释放），也是项目开发中的推荐方式。
+> 提示：`with` 语句（上下文管理器）的核心作用就是确保资源的总是被正确获取和释放（即使发生异常，也会被正确释放），也是项目开发中的`推荐方式`。
 
 
 
 ##### 小结
 
-1. 操作文件时，文件资源释放的最佳实践？
-
+1. `操作文件时，文件资源释放的最佳实践？`
    - try...finally
    - with open()方法`（推荐，最佳实践）`
 
@@ -408,6 +441,28 @@ f.close()
 ![课件图示](../pythonImages/41.png)
 
 ![课件图示](../pythonImages/42.png)
+
+~~~python
+import json
+
+obj={
+    "name":"张三",
+    "age":18,
+    "gender":"男",
+    "hobbies":["reading","swimming"]
+}
+
+with open("resources/session.json","w",encoding = "utf-8") as f:
+    json.dump(obj,f,ensure_ascii=False,indent=2)
+~~~
+
+~~~python
+import json
+
+with open("resources/session.json","r",encoding = "utf-8") as f:
+   obj=json.load(f)
+   print(obj)
+~~~
 
 
 
