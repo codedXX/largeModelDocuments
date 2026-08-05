@@ -606,5 +606,299 @@ if __name__ == '__main__':
 
 > API接口：应用程序编程接口(Application Programming Interface)，就是对外提供的功能入口，供别人来调用（比如：天气查询的API接口）。
 
+
+
+**使用步骤**
+
+1. 导入FastAPI
+
+2. 创建FastAPI实例对象
+
+3. 创建路径操作函数，定义访问路径
+
+4. 运行FastAPI服务
+
+   ~~~python
+    fastapi dev "xxxx.py"
+    uvicorn xxxx:app --reload
+   ~~~
+
+~~~python
+from fastapi import FastAPI
+
+# 创建 FastAPI 实例
+app = FastAPI()
+
+# 定义API接口 ---> 该函数的返回值表示 API接口 的返回的数据 , 接口访问路径为 /, 请求方式 GET
+@app.get("/")
+def root():
+    return {"message": "Hello World"}
+
+# 定义API接口
+@app.get("/users")
+def get_users():
+    return [
+        {"id": 1, "name": "张三"},
+        {"id": 2, "name": "李四"},
+        {"id": 3, "name": "王五"},
+    ]
+
+# 启动服务 ----> uvicorn: Python中的轻量级Web服务器
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
+~~~
+
+
+
+> uvicorn：专门为现代 Python Web 框架（FastAPI、Starlette）设计的高性能服务器。
+
+
+
+#### 小结
+
+1. 什么是 FastAPI？
+   * FastAPI 是一个现代、快速、高性能的 Python Web 框架，用来构建 API 接口服务。
+
+2. 基于 FastAPI 如何开发服务端接口？
+
+   * 导入 FastAPI
+
+   * 创建 FastAPI 实例对象
+
+   * 创建路径操作函数，定义访问路径
+
+   * 运行 FastAPI 服务
+
+     ~~~python
+     fastapi dev "xxxx.py"
+     uvicorn xxxx:app --reload
+     ~~~
+
 ## 汉字谜盒案例
+
+### 开发规范
+
+* Restful指的是遵循REST架构风格的API接口服务，而REST（`RE`presentational `S`tate `T`ransfer），表述性状态转换，它是一种软件架构风格。
+
+| 传统风格 URL                               | 请求方式 | 含义                |
+| ------------------------------------------ | -------- | ------------------- |
+| http://localhost:8000/user/getById?id=1    | GET      | 查询 id 为 1 的用户 |
+| http://localhost:8000/user/saveUser        | POST     | 新增用户            |
+| http://localhost:8000/user/updateUser      | POST     | 修改用户            |
+| http://localhost:8000/user/deleteUser?id=1 | GET      | 删除 id 为 1 的用户 |
+
+| REST 风格 URL                 | 请求方式 | 含义                |
+| ----------------------------- | -------- | ------------------- |
+| http://localhost:8000/users/1 | GET      | 查询 id 为 1 的用户 |
+| http://localhost:8000/users/1 | DELETE   | 删除 id 为 1 的用户 |
+| http://localhost:8000/users   | POST     | 新增用户            |
+| http://localhost:8000/users   | PUT      | 修改用户            |
+
+> **注意：**REST是风格，是约定方式，约定不是规定，可以打破 。
+
+> **注意：**描述功能模块通常使用复数形式（加s），表示此类资源，而非单个资源。如：users、books、items 。
+
+#### 小结
+
+1. REST风格的特点 ?
+   * URL定义资源
+   * HTTP动词描述操作
+2. REST风格中的四种请求方式及对应的操作?
+   * GET：查询
+   * POST：新增
+   * PUT：修改
+   * DELETE：删除
+
+### 基础环境搭建
+
+1. 创建项目文件夹，将资料中的 static 目录拷贝到项目中 。
+2. 编写python程序，定义路径操作函数，访问前端HTML页面 。
+
+![课件图示](../pythonImages/63.png)
+
+> 汉字谜盒 是一款基于人工智能的字谜互动游戏，专为汉字爱好者设计。在这里，你将与AI机器人进行有趣的猜字挑战！AI会随机出一道经典字谜（如"一箭穿心"），你需要根据谜面提示猜出对应的汉字，AI会根据你的回答给出相应的提示，并给出最终的答案。
+
+### 核心功能开发
+
+#### 新建会话
+
+* 请求路径：/api/sessions
+
+* 请求方式：POST
+
+* 请求参数：无
+
+* 响应数据：
+
+  ~~~json
+  {
+      "code": 200,
+      "message": "创建会话成功",
+      "data": "2026-04-12_16-16-13"
+  }
+  ~~~
+
+  
+
+#### 与AI交互
+
+* 在与AI进行交互式，前端传递给服务端的参数包含两项，分别为session_id 与 message，并以json格式在请求体中传递到服务端。
+
+  * 请求路径：`/api/chat`
+
+  * 请求方式：`POST`
+
+  * 请求参数：
+
+    ~~~json
+    {
+      "session_id": "2026-04-12_16-16-13",
+      "message": "你好"
+    }
+    ~~~
+
+  - 响应数据：
+
+    ~~~json
+    {
+      "code": 200,
+      "message": "请求成功",
+      "data": "谜面：半部春秋(打一字)"
+    }
+    ~~~
+
+    
+
+  
+
+![课件图示](../pythonImages/64.png)
+
+> **BaseModel：**是Pydantic库提供的父类（FastAPI 深度集成了 Pydantic），用于定义FastAPI数据模型和数据验证规则。 
+
+* 在会话页面，我们就可以输入我们的问题或者答案，然后请求服务端与AI进行交互了。![课件图示](../pythonImages/66.png)
+
+
+
+##### 小结
+
+FastAPI中如何接收POST请求体中传递的json格式数据?
+
+![课件图示](../pythonImages/65.png)
+
+#### 会话列表
+
+* 在汉字谜盒项目的左侧侧边栏，要查询并展示出所有的会话信息，将会话名展示在左侧， 并且根据时间倒序排序。	
+
+  * 请求路径：`/api/sessions`
+
+  * 请求方式：`GET`
+
+  * 请求参数：无
+
+  * 响应数据：
+
+    ~~~json
+    {
+      "code": 200,
+      "message": "获取会话列表成功",
+      "data": [
+        "2026-04-12_13-32-52",
+        "2026-04-12_13-20-15",
+        "2026-04-12_13-18-03",
+        "2026-04-12_12-03-29"
+      ]
+    }
+    ~~~
+
+    
+
+#### 加载指定会话
+
+* 在点击左侧的会话名称之后，就要查询出该会话对应的会话信息，并在消息展示栏将其展示出来。	
+
+  * 请求路径：`/api/sessions/2026-04-12_13-20-15`
+
+  * 请求方式：`GET`
+
+  * 请求参数：会话 ID
+
+  * 响应数据：
+
+    ~~~json
+    {
+      "code": 200,
+      "message": "获取会话成功",
+      "data": {
+        "current_session": "2026-04-12_13-20-15",
+        "messages": [
+          {
+            "role": "user",
+            "content": "你好"
+          },
+          {
+            "role": "assistant",
+            "content": "来猜个字谜吧：一口咬掉牛尾巴"
+          }
+        ]
+      }
+    }
+    ~~~
+
+    
+
+#### 删除会话
+
+* 在点击左侧会话名称之后的 `x` ，就要将当前的会话信息直接删除掉 。
+
+  * 请求路径：`/api/sessions/2026-04-12_13-20-15`
+
+  * 请求方式：`DELETE`
+
+  * 请求参数：会话 ID
+
+  * 响应数据：
+
+    ~~~json
+    {
+      "code": 200,
+      "message": "会话已删除",
+      "data": null
+    }
+    ~~~
+
+
+
+#### 日志记录
+
+* 基于print()语句记录日志有什么问题 ?![课件图示](../pythonImages/67.png)
+* ![课件图示](../pythonImages/68.png)
+
+
+
+**为了能够灵活的控制项目中日志的输出，我们可以通过官方提供的logging模块来输出日志，具体做法如下：**
+
+> `日志级别：`日志级别就是给日志信息贴上的"重要性标签"，常见的级别有：DEBUG、INFO、WARNING、ERROR、FATAL（日志级别依次升高）。
+
+
+
+#### 统一异常处理
+
+* 项目中的功能较多，目前我们并未考虑异常处理，可以借助于FastAPI中的统一异常处理方案来处理异常。
+
+  ~~~~python
+  # 统一处理异常信息
+  @app.exception_handler(Exception)
+  def handle_exception(request: Request, exc: Exception):
+      logging.error(f"处理异常，请求路径：{request.url}，异常信息：{exc}")
+      return JSONResponse(content={"code": 500, "message": "服务器内部错误"})
+  ~~~~
+
+  
+
+
+
+
+
+### 程序优化
 
