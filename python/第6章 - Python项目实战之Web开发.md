@@ -653,7 +653,7 @@ if __name__ == "__main__":
 
 > uvicorn：专门为现代 Python Web 框架（FastAPI、Starlette）设计的高性能服务器。
 
-
+> `Uvicorn` 是一个用于启动 FastAPI 程序的服务器。FastAPI 负责编写接口，Uvicorn 负责运行它、监听端口。
 
 #### 小结
 
