@@ -134,7 +134,7 @@ long_query_time=2
 
 可以采用**EXPLAIN** 或者 **DESC**命令获取 MySQL 如何执行 SELECT 语句的信息
 
-- - 直接在select语句之前加上关键字 explain / desc<br>EXPLAIN   SELECT   字段列表   FROM   表名   WHERE  条件 ;
+- 直接在select语句之前加上关键字 explain / desc<br>EXPLAIN   SELECT   字段列表   FROM   表名   WHERE  条件 ;
 - 语法：
 
 ![第 9 页：一个SQL语句执行很慢, 如何分析](../JavaInterviewImages/mysql-slide-009.png)
@@ -480,7 +480,9 @@ B+Tree是在BTree基础上的一种优化，使其更适合实现外存储索引
 
 <!-- 源 PPTX 第 25 页 -->
 
-select \* from user where name = ‘Arm’;
+```text
+select * from user where name = ‘Arm’;
+```
 
 聚集索引
 
@@ -521,9 +523,11 @@ select \* from user where name = ‘Arm’;
 - id为主键，默认是主键索引
 - name字段为普通索引
 
-- select \* from tb\_user where id = 1
-- select id，name from tb\_user where name = ‘Arm’
-- select id，name，gender from tb\_user where name = ‘Arm’
+```text
+select * from tb_user where id = 1
+select id，name from tb_user where name = ‘Arm’
+select id，name，gender from tb_user where name = ‘Arm’
+```
 
 覆盖索引
 
@@ -562,7 +566,9 @@ select \* from user where name = ‘Arm’;
 
 row
 
-select  \*  from  tb\_user  where  id  =  2 ;
+```text
+select  *  from  tb_user  where  id  =  2 ;
+```
 
 Lee
 
@@ -611,7 +617,9 @@ Zoo
 
 row
 
-select  \*  from  tb\_user  where  id  =  2 ;
+```text
+select  *  from  tb_user  where  id  =  2 ;
+```
 
 Lee
 
@@ -619,7 +627,9 @@ Rose
 
 辅助索引(name)
 
-select  id, name  from  tb\_user  where  name = ‘Arm’ ;
+```text
+select  id, name  from  tb_user  where  name = ‘Arm’ ;
+```
 
 Arm
 
@@ -662,7 +672,9 @@ Zoo
 
 row
 
-select  \*  from  tb\_user  where  id  =  2 ;
+```text
+select  *  from  tb_user  where  id  =  2 ;
+```
 
 **回表 查询**
 
@@ -672,7 +684,9 @@ Rose
 
 辅助索引(name)
 
-select  id, name  from  tb\_user  where  name = ‘Arm’ ;
+```text
+select  id, name  from  tb_user  where  name = ‘Arm’ ;
+```
 
 Arm
 
@@ -682,7 +696,9 @@ Lily
 
 Zoo
 
-select  id,name,gender  from  tb\_user  where  name = ‘Arm’ ;
+```text
+select  id,name,gender  from  tb_user  where  name = ‘Arm’ ;
+```
 
 **id=2**
 
@@ -719,7 +735,12 @@ MYSQL超大分页怎么处理 ?
 
 优化思路: 一般分页查询时，通过创建 **覆盖索引 **能够比较好地提高性能，可以通过**覆盖索引**加**子查询**形式进行优化
 
-select *\**<br>from tb\_sku t,<br>     (select id from tb\_sku order by id limit 9000000,10) a<br>where t.id = a.id;
+```text
+select *
+from tb_sku t,
+     (select id from tb_sku order by id limit 9000000,10) a
+where t.id = a.id;
+```
 
 ![第 33 页：MYSQL超大分页处理](../JavaInterviewImages/mysql-slide-033.png)
 
@@ -903,7 +924,11 @@ for (int i = 0; i < 3; i++) {
 }
 ```
 
-select *\* *from t\_user where id \> 2<br>union all  | union<br>select *\* *from t\_user where id \< 5
+```text
+select * from t_user where id > 2
+union all  | union
+select * from t_user where id < 5
+```
 
 ![第 47 页：谈谈你对sql的优化的经验](../JavaInterviewImages/mysql-slide-047.png)
 
@@ -1151,9 +1176,11 @@ commit
 
 **Buffer Pool**
 
-- update
-- update
-- delete
+```text
+update
+update
+delete
+```
 
 commit
 
@@ -1175,9 +1202,11 @@ commit
 
 **Redolog buffer**
 
-- update
-- update
-- delete
+```text
+update
+update
+delete
+```
 
 commit
 
@@ -1674,7 +1703,9 @@ slave
 - 从库读取主库的二进制日志文件 Binlog ，写入到从库的中继日志 Relay Log 。
 - slave重做中继日志中的事件，将改变反映它自己的数据。
 
+```text
 insert
+```
 
 IOthread
 

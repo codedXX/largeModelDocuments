@@ -232,9 +232,167 @@
 > 红黑树为了让每个节点都有左右孩子指针，会把原本的空孩子用黑色的 `NIL` 哨兵表示。因此：
 >
 > ```
->     6
->    / \
->  NIL NIL
+>  6
+> / \
+> NIL NIL
 > ```
 >
 > 严格按照红黑树的定义，`NIL` 才是叶子，6 被称为内部节点。不过在非严格的描述中，也常把没有实际键值孩子的 6 称为“实际叶子节点”。
+
+
+
+
+
+
+
+> 什么是二级索引？
+>
+> 二级索引就是“除聚集索引/主键索引之外的索引”，也常称为非聚集索引或辅助索引。
+>
+> 以 InnoDB 为例：
+>
+> ```
+> CREATE TABLE orders (
+> id BIGINT PRIMARY KEY,
+> user_id BIGINT,
+> status VARCHAR(20),
+> created_at DATETIME,
+> INDEX idx_user_status (user_id, status)
+> );
+> ```
+>
+> 这里：
+>
+> - `PRIMARY KEY (id)` 是聚集索引，叶子节点存整行数据。
+> - `idx_user_status (user_id, status)` 是二级索引，叶子节点通常存：
+>   `user_id`、`status`、以及主键值 `id`。
+>
+> 因此查询：
+>
+> ```
+> SELECT * FROM orders
+> WHERE user_id = 42 AND status = 'paid';
+> ```
+>
+> 一般过程是：
+>
+> 1. 在二级索引 `idx_user_status` 中找到符合条件的记录。
+> 2. 得到对应的主键 `id`。
+> 3. 再到主键聚集索引中按 `id` 找完整数据行。
+>
+> 第 3 步常叫“回表”。
+>
+> 若查询的列都已包含在二级索引中，例如：
+>
+> ```
+> SELECT id, user_id, status
+> FROM orders
+> WHERE user_id = 42 AND status = 'paid';
+> ```
+>
+> 就不需要回表，称为覆盖索引查询，通常更快。
+
+
+
+> ```
+> INDEX idx_user_status (user_id, status)
+> ```
+>
+> 这样写的话，就一定要
+>
+> ```java
+> WHERE user_id = 42 AND status = 'paid';
+> ```
+>
+> 这样才会触发索引吗？
+>
+> 
+>
+> ```
+> WHERE user_id = 42
+> ```
+>
+> 这样写会触发吗?
+>
+> `WHERE user_id = 42` 也可以使用索引 `idx_user_status (user_id, status)`。
+>
+> 因为复合索引按 `(user_id, status)` 排序，先按 `user_id` 排，再在相同 `user_id` 内按 `status` 排。这符合“最左前缀”原则。
+>
+> ```
+> -- 能使用 (user_id, status)
+> WHERE user_id = 42
+> 
+> -- 也能使用
+> WHERE user_id = 42 AND status = 'paid'
+> 
+> -- 通常不能有效使用该索引来筛选
+> WHERE status = 'paid'
+> ```
+>
+> 可以把 `(user_id, status)` 想成电话簿先按城市、再按姓名排序：
+>
+> - 知道城市：能快速找到该城市的一段记录。
+> - 同时知道城市和姓名：能快速定位到更小范围。
+> - 只知道姓名：无法直接跳到对应位置。
+>
+> 不过，“能使用”不等于数据库一定会选它。若 `user_id = 42` 匹配了表中绝大多数记录，优化器可能认为全表扫描成本更低。使用 `EXPLAIN` 可以确认实际执行计划。
+
+
+
+> ```java
+> WHERE status = 'paid'
+> ```
+>
+> 意思是这样不会触发
+>
+> ```
+> INDEX idx_user_status (user_id, status)
+> ```
+>
+> 这个索引，是吗？
+>
+> 
+>
+> 通常是的。对于复合索引：
+>
+> ```
+> INDEX idx_user_status (user_id, status)
+> ```
+>
+> 单独查询：
+>
+> ```
+> WHERE status = 'paid'
+> ```
+>
+> 通常无法有效利用这个索引进行定位，因为缺少最左列 `user_id`。这就是复合索引的“最左前缀原则”。
+>
+> 但有两个细节：
+>
+> - 某些数据库可能进行全索引扫描、跳跃扫描等特殊优化，但这不等于高效使用索引。
+> - 如果 `status` 本身经常单独查询，应建立单列索引：
+>
+> ```
+> INDEX idx_status (status)
+> ```
+>
+> 最终仍以执行计划为准：
+>
+> ```
+> EXPLAIN SELECT *
+> FROM orders
+> WHERE status = 'paid';
+> ```
+
+
+
+> select * from tb_user where id = 1 这个语句是覆盖索引吗？
+>
+> * 是的，因为id是聚集索引，聚集索引里存的是一整行的数据
+
+
+
+> select id, name from tb_user where name = 'Arm' 这个语句是覆盖索引吗
+>
+> * 是，因为当前走的是name的二级索引，二级索引中可以找到id和name
+
