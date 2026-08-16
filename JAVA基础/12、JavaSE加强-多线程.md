@@ -202,6 +202,27 @@ new Thread(() -> System.out.println("子线程执行")).start();
 | --- | --- |
 | 任务类只是实现接口，**可以继续继承其他类**，扩展性强 | 多一个 Runnable 对象；**不能直接返回执行结果** |
 
+
+
+> ⭐️**注意：**
+>
+> * 可以直接多次调用 `run()`，因为它只是普通方法调用。但两次执行都发生在当前线程（通常是 `main` 线程），不会创建新线程。
+>
+>   * 也就是说不start()，直接run()
+>
+>     ~~~java
+>     t.run();
+>     t.run();
+>     ~~~
+>
+> * 不可以多次调用 `start()`
+>
+>   ~~~java
+>   调用 start()
+>   ~~~
+>
+>   
+
 ### 2.3 方式三：实现 Callable 接口 + FutureTask（JDK 5+）
 
 > **方式三的优点**：**线程任务类只是实现接口，可以继续继承类和实现接口，扩展性强；<span style="color:red">可以在线程执行完毕后去获取线程执行的结果。</span>**
@@ -285,6 +306,7 @@ class MyCallable implements Callable<String> {
         this.n = n;
     }
     // 2、实现call方法，定义线程执行体
+    @Override
     public String call() throws Exception {
         int sum = 0;
         for (int i = 1; i <= n; i++) {
