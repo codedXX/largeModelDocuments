@@ -989,7 +989,7 @@ ThreadPoolExecutor
 
 
 
-### 10.1 方式一：ThreadPoolExecutor（重点）
+### ⭐10.1 方式一：ThreadPoolExecutor（重点）
 
 #### 七大参数（必背 ⭐）
 
@@ -1039,6 +1039,119 @@ public ThreadPoolExecutor(
   * new ThreadPoolExecutor.CallerRunsPolicy()这个策略的意思就是说忙不过来就直接抛异常
 
 
+
+> ⭐⭐⭐⭐⭐**任务队列和临时线程的关系**
+>
+> ⭐**任务队列不满的话，是不会创建临时线程的，如果2个核心线程用完了，就去任务队列排队**
+>
+> ```
+> 核心线程数未达到 3
+>     → 创建核心线程
+> 
+> 核心线程数达到 3
+>     → 新任务进入任务队列
+> 
+> 任务队列未满
+>     → 不创建临时线程
+> 
+> 任务队列已满
+>     → 创建临时线程，直到达到最大线程数 5
+> 
+> 队列满 + 线程数达到 5
+>     → 执行拒绝策略
+> ```
+>
+> 在你的配置中：
+>
+> ```
+> 核心线程数：3
+> 队列容量：2
+> 最大线程数：5
+> ```
+>
+> 可以理解为：
+>
+> ```
+> 任务1、2、3：核心线程执行
+> 任务4、5：进入队列
+> 任务6、7：创建临时线程执行
+> ```
+>
+> 更准确地说，线程池判断的是“当前核心线程数量是否已达到 2”，不完全是判断核心线程是否正在忙。即使核心线程暂时空闲，新任务也可能先进入队列，然后由空闲线程取走执行。
+>
+> 临时线程只会在：
+>
+> ```
+> 核心线程已达到上限，并且任务队列已满
+> ```
+>
+> 时创建。
+>
+> 
+>
+> ⭐**意思是任务5，6还可能比3，4更早执行么？**
+>
+> 是的，任务 5、6 可能比任务 3、4 更早执行。
+>
+> 因为：
+>
+> ```
+> 任务 3、4：进入队列等待
+> 任务 5、6：队列已满，创建临时线程直接执行
+> ```
+>
+> 所以可能出现：
+>
+> ```
+> 核心线程：执行任务 1、2
+> 临时线程：执行任务 5、6
+> 队列任务：任务 3、4 等核心线程空闲后再执行
+> ```
+>
+> 任务队列本身通常是 FIFO，但任务 5、6 没有进入队列，而是由临时线程直接执行，因此不保证全局顺序。
+>
+> 如果希望严格按照提交顺序执行，可以使用：
+>
+> ```
+> Executors.newSingleThreadExecutor()
+> ```
+>
+> 或者把线程池的核心线程数和最大线程数都设置为 `1`。
+>
+> 
+>
+> ⭐**不管核心线程有无空闲，都是先把任务放到任务队列，对吗？**准确地说：
+>
+> > 当核心线程数量已经达到 `corePoolSize` 后，不管核心线程当前是否空闲，都会先尝试把任务放入队列。
+>
+> 流程是：
+>
+> ```
+> 当前线程数 < corePoolSize
+>     → 创建核心线程，直接执行任务
+> 
+> 当前线程数 >= corePoolSize
+>     → 先尝试放入任务队列
+> 
+> 任务队列已满
+>     → 创建临时线程执行任务
+> ```
+>
+> 所以你的配置中，核心线程数达到 2 后：
+>
+> ```
+> pool.execute(task);
+> ```
+>
+> 会先执行：
+>
+> ```
+> workQueue.offer(task);
+> ```
+>
+> 空闲核心线程此时通常正在等待队列中的任务，会马上把任务取出来执行。
+>
+> 但如果队列也满了，任务就不会继续排队，而是尝试创建临时线程。
 
 **示例：**
 
@@ -1261,6 +1374,225 @@ public class MyCallable implements Callable<String> {
 | **ThreadPoolExecutor.CallerRunsPolicy()** | 由**主线程**负责调用任务的 run() 方法从而绕过线程池直接执行 |
 
 ---
+
+### 示例代码
+
+~~~~java
+// 有界阻塞队列：当核心线程都在工作时，任务可以暂时放在这里等待。
+import java.util.concurrent.ArrayBlockingQueue;
+
+// 线程工厂：线程池需要创建线程时，会通过它创建具体的 Thread 对象。
+import java.util.concurrent.ThreadFactory;
+
+// ThreadPoolExecutor：Java 线程池最核心的实现类。
+import java.util.concurrent.ThreadPoolExecutor;
+
+// 时间单位：用于表示临时线程的空闲存活时间。
+import java.util.concurrent.TimeUnit;
+
+// 原子整数：安全地为每个线程生成递增的编号。
+import java.util.concurrent.atomic.AtomicInteger;
+
+/**
+ * 演示 ThreadPoolExecutor 如何创建和复用线程。
+ *
+ * 本示例的线程池配置如下：
+ * 1. 核心线程数为 2；
+ * 2. 任务队列容量为 2；
+ * 3. 最大线程数为 4。
+ *
+ * 提交任务时，可以观察到如下过程：
+ * 1. 前两个任务由核心线程执行；
+ * 2. 后面的任务先进入任务队列；
+ * 3. 队列满后，线程池创建临时线程执行更多任务。
+ */
+public class ThreadPoolDemo {
+
+    /**
+     * 程序入口。
+     *
+     * @param args 命令行参数，本示例不使用
+     * @throws InterruptedException 等待线程池结束时，主线程可能被中断
+     */
+    public static void main(String[] args) throws InterruptedException {
+        // 创建线程工厂。
+        // ThreadPoolExecutor 不会直接写死线程创建方式，而是通过 ThreadFactory 创建线程。
+        ThreadFactory threadFactory = new ThreadFactory() {
+            // 从 1 开始给线程编号，生成 demo-thread-1、demo-thread-2 等名称。
+            private final AtomicInteger threadNumber = new AtomicInteger(1);
+
+            /**
+             * 在线程池需要创建新工作线程时执行这个方法。
+             *
+             * @param runnable 线程启动后要执行的任务
+             * @return 创建好的线程对象
+             */
+            @Override
+            public Thread newThread(Runnable runnable) {
+                // 生成一个容易观察的线程名称。
+                String threadName = "demo-thread-" + threadNumber.getAndIncrement();
+
+                // 这行日志可以帮助我们观察 ThreadPoolExecutor 什么时候创建线程。
+                System.out.println("创建线程：" + threadName);
+
+                // 把线程池传入的 Runnable 交给新线程执行。
+                return new Thread(runnable, threadName);
+            }
+        };
+
+        // 创建线程池。
+        ThreadPoolExecutor pool = new ThreadPoolExecutor(
+                2,                              // corePoolSize：核心线程数
+                4,                              // maximumPoolSize：线程总数的最大值
+                10,                             // keepAliveTime：临时线程空闲 10 秒后可以被回收
+                TimeUnit.SECONDS,               // keepAliveTime 的时间单位
+                new ArrayBlockingQueue<>(2),    // workQueue：最多同时等待 2 个任务
+                threadFactory,                  // threadFactory：负责创建并命名线程
+                new ThreadPoolExecutor.AbortPolicy()
+        );
+//        new ThreadPoolExecutor.CallerRunsPolicy() // 队列和线程都满时的拒绝策略
+
+        // 提交 6 个任务。
+        //
+        // 在任务执行时间较长、提交速度较快时，通常会看到：
+        // 任务 1、2：创建核心线程执行；
+        // 任务 3、4：进入容量为 2 的任务队列；
+        // 任务 5、6：队列满后，创建临时线程执行。
+        for (int i = 1; i <= 7; i++) {
+            // Lambda 会捕获当前任务编号，保证每个任务打印自己的编号。
+            int taskId = i;
+
+            // execute() 把 Runnable 任务提交给线程池。
+            // 线程池会决定是创建线程、放入队列，还是执行拒绝策略。
+            pool.execute(() -> {
+                // 获取实际执行这个任务的线程名称。
+                System.out.println(
+                        Thread.currentThread().getName() + " 执行任务：" + taskId
+                );
+
+                try {
+                    // 模拟一个耗时任务，便于观察线程池扩容和线程复用。
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    // sleep() 被中断后会清除中断标记，因此需要手动恢复中断状态。
+                    // 这样上层代码仍然可以知道这个线程曾经被中断。
+                    Thread.currentThread().interrupt();
+                }
+            });
+        }
+
+        // 关闭线程池，不再接收新任务。
+        // 已经提交的任务不会被丢弃，仍然会继续执行。
+        pool.shutdown();
+
+        // 最多等待 30 秒，等待已经提交的任务执行完成。
+        // 如果不等待，main() 可能在任务完成前就结束。
+        pool.awaitTermination(30, TimeUnit.SECONDS);
+    }
+}
+~~~~
+
+**打印结果**
+
+~~~
+C:\Users\YX\scoop\apps\openjdk21\current\bin\java.exe "-javaagent:D:\IntelliJ IDEA 2026.1\lib\idea_rt.jar=51675" -Dfile.encoding=UTF-8 -Dsun.stdout.encoding=UTF-8 -Dsun.stderr.encoding=UTF-8 -classpath F:\Projects\interviewProjects\javaDemo\out\production\javaDemo ThreadPoolDemo
+创建线程：demo-thread-1
+创建线程：demo-thread-2
+创建线程：demo-thread-3
+创建线程：demo-thread-4
+demo-thread-1 执行任务：1
+demo-thread-3 执行任务：5
+demo-thread-2 执行任务：2
+demo-thread-4 执行任务：6
+Exception in thread "main" java.util.concurrent.RejectedExecutionException: Task ThreadPoolDemo$$Lambda/0x0000020281003c00@4edde6e5 rejected from java.util.concurrent.ThreadPoolExecutor@6e8cf4c6[Running, pool size = 4, active threads = 4, queued tasks = 2, completed tasks = 0]
+	at java.base/java.util.concurrent.ThreadPoolExecutor$AbortPolicy.rejectedExecution(ThreadPoolExecutor.java:2081)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.reject(ThreadPoolExecutor.java:841)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.execute(ThreadPoolExecutor.java:1376)
+	at ThreadPoolDemo.main(ThreadPoolDemo.java:86)
+demo-thread-3 执行任务：4
+demo-thread-4 执行任务：3
+
+~~~
+
+> ⭐**输出结果讲解**
+>
+> 
+>
+> 你现在的代码已经改成了：
+>
+> ```
+> new ThreadPoolExecutor.AbortPolicy()
+> ```
+>
+> 并且循环提交了 7 个任务：
+>
+> ```
+> for (int i = 1; i <= 7; i++)
+> ```
+>
+> 前 6 个任务的状态是：
+>
+> ```
+> 任务1、2：核心线程执行
+> 任务3、4：进入队列
+> 任务5、6：创建临时线程执行
+> ```
+>
+> 提交第 7 个任务时，线程池状态是：
+>
+> ```
+> pool size = 4       // 已达到最大线程数
+> active threads = 4  // 4 个线程都在执行
+> queued tasks = 2    // 队列已满
+> ```
+>
+> 此时没有位置接收任务 7，于是触发 `AbortPolicy`：
+>
+> ```
+> throw new RejectedExecutionException(...)
+> ```
+>
+> 所以异常出现在：
+>
+> ```
+> ThreadPoolDemo.main(ThreadPoolDemo.java:86)
+> ```
+>
+> 因为是 `main` 线程调用的：
+>
+> ```
+> pool.execute(task7);
+> ```
+>
+> 所以异常打印为：
+>
+> ```
+> Exception in thread "main"
+> ```
+>
+> 任务 3、4 后面仍然执行，是因为它们在异常发生前已经进入队列，不受任务 7 被拒绝的影响。
+>
+> 另外，由于异常直接中断了 `for` 循环，下面的：
+>
+> ```
+> pool.shutdown();
+> ```
+>
+> 实际上没有执行。
+>
+> 如果换回：
+>
+> ```
+> new ThreadPoolExecutor.CallerRunsPolicy()
+> ```
+>
+> 任务 7 就不会抛异常，而是由 `main` 线程执行：
+>
+> ```
+> main 执行任务：7
+> ```
+
+
 
 ## 十一、方式二：Executors 工具类
 
